@@ -1,0 +1,177 @@
+radium:
+  api:
+    base_url: "http://localhost:8080"
+    timeout: 5000
+    retry_attempts: 3
+    cache_duration: 300 # 5 minutes
+  fallback:
+    default_rank: "Default"
+    default_prefix: "&7"
+
+database:
+  mongodb:
+    connection_string: "mongodb://radium:radium123@localhost:27017"
+    database_name: "lobby"
+  redis:
+    enabled: false  # Disabled since we're using Radium HTTP API
+    host: "localhost"
+    port: 6379
+    password: "radium123"
+    database: 0
+
+spawn:
+  world: "lobby"
+  x: 0.5
+  y: 100.0
+  z: 0.5
+  yaw: 0.0
+  pitch: 0.0
+
+schematics:
+  enabled: true
+  paste_on_startup: true
+  async_operations: true
+  cache_enabled: true
+  cache_max_size: 10
+  files:
+    lobby:
+      file: "schematics/lobby.schem"
+      origin:
+        x: 0
+        y: 64
+        z: 0
+      rotation: 0  # 0, 90, 180, 270 degrees
+      mirror: false
+      paste_air: false
+      enabled: true
+
+lobby:
+  join-items:
+    "0": "COMPASS:&bServer Selector"
+    "1": "REDSTONE:&ePlayer Visibility" 
+    "4": "NETHER_STAR:&6Lobby Items"
+    "7": "BOOK:&aServer Info"
+    "8": "BARRIER:&cLeave Server"
+
+queue:
+  enabled: true
+  servers:
+    survival:
+      name: "&aSurvival"
+      priority: 1
+      max_players: 100
+    creative:
+      name: "&bCreative" 
+      priority: 2
+      max_players: 50
+    skyblock:
+      name: "&eSkyBlock"
+      priority: 3
+      max_players: 75
+
+scoreboard:
+  enabled: true
+  title: "&dMythic&fPvP"  # Light pink "Mythic" + white "PvP"
+  lines:
+    # Bottom to top order (higher line numbers appear higher on scoreboard)
+    - "&dplay.mythicpvp.net"  # Server IP (bottom line - light pink)
+    - "%date%"  # Current date (white)
+    - ""  # Empty line
+    - " ▌ &aSkyblock &2[%skyblock_players%]"  # Light green "Skyblock" + dark green player count
+    - " ▌ &cGens &4[%gens_players%]"  # Light red "Gens" + dark red player count  
+    - " ▌ &bPrison &1[%prison_players%]"  # Light blue "Prison" + dark blue player count
+    - " ▌ &dServers"  # Light pink "Servers" header
+    - ""  # Empty line
+    - " ▌ &7Server: &f%current_server%"  # Gray "Server:" + white server name
+    - " ▌ &7Player: &f%player_name%"  # Gray "Player:" + white player name
+    - " ▌ &dInformation"  # Light pink "Information" header
+    - ""  # Empty line
+    - "&7      Lobby Server      "  # Centered gray text right under title
+
+# Tab list formatting - respects Radium prefixes
+tablist:
+  enabled: true
+  header:
+    - ""
+    - "&d&lMythic&f&lPvP"
+    - "&7play.mythicpvp.net"
+    - ""
+  footer:
+    - ""
+    - "&7Online: &f%online_players%"
+    - "&7Server: &fLobby"
+    - ""
+  # Player name formatting (only applies if Radium doesn't provide formatting)
+  fallback_format: "&7%player_name%"
+  # Don't override Radium formatting
+  respect_radium_formatting: true
+
+# World lighting and weather - keeps lobby bright
+world_lighting:
+  enabled: true
+  always_day: true  # Keep world time at day
+  clear_weather: true  # Always clear weather
+  max_light_level: true  # Maximum light everywhere
+
+messages:
+  prefix: "&8[&bLobby&8] &r"
+  no_permission: "&cYou don't have permission to do that!"
+  player_not_found: "&cPlayer not found!"
+  command_disabled: "&cThis command is disabled!"
+  
+  join_message: "&7%player% &ejoined the lobby"
+  leave_message: "&7%player% &eleft the lobby"
+  
+  fly_enabled: "&aFly mode enabled!"
+  fly_disabled: "&cFly mode disabled!"
+  
+  spawn_teleported: "&aTeleported to spawn!"
+  spawn_set: "&aSpawn location set!"
+  
+  queue_joined: "&aYou joined the %server% queue!"
+  queue_left: "&cYou left the %server% queue!"
+  queue_paused: "&eThe %server% queue is paused"
+  queue_resumed: "&aThe %server% queue is resumed"
+  
+  visibility_all: "&aYou can now see all players!"
+  visibility_staff: "&eYou can now only see staff members!"
+  visibility_none: "&cYou are now invisible to other players!"
+  
+  # Protection messages
+  protection:
+    block_break: "&cYou cannot break blocks here!"
+    block_place: "&cYou cannot place blocks here!"
+    item_drop: "&cYou cannot drop items here!"
+    item_pickup: "&cYou cannot pickup items here!"
+    inventory_move: "&cInventory interactions are disabled!"
+    portal_use: "&cPortals are disabled!"
+    chat: "&cChat is currently disabled!"
+
+protection:
+  anti_break: true
+  anti_place: true
+  anti_drop: true
+  anti_pickup: true
+  anti_hunger: true
+  anti_weather: true
+  anti_mob_spawn: true
+  anti_fall_damage: true
+  anti_void_damage: true
+  anti_portal: true
+  anti_chat: false  # Allow default players to chat if they have permission
+  inventory_move: true  # Prevent inventory interactions
+
+features:
+  double_jump: true
+  launch_pads: true
+  visibility_switching: true
+  player_hider: true
+  chat_formatting: true
+  tab_formatting: true
+
+server:
+  port: 25566
+  velocity:
+    enabled: true
+    secret: "your-velocity-secret-here"  # Should match velocity.toml forwarding-secret
+  bind_address: "0.0.0.0"

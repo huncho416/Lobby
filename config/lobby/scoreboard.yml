@@ -1,0 +1,30 @@
+# Lobby Plugin Scoreboard Configuration
+# =====================================
+
+# Scoreboard Settings
+scoreboard:
+  enabled: true
+  title: "&b&lLOBBY"
+  update-interval: 20 # ticks (1 second)
+  
+  # Lines (use {placeholder} for dynamic content)
+  lines:
+    - ""
+    - "&7Online: &b{online_players}"
+    - "&7Rank: {player_rank}"
+    - ""
+    - "&7Queue: {player_queue}"
+    - "&7Position: &e#{queue_position}"
+    - ""
+    - "&7Server: &aLobby"
+    - ""
+    - "&ewww.example.com"
+
+# Placeholders
+placeholders:
+  online_players: "Online players count"
+  player_rank: "Player's rank from Radium"
+  player_queue: "Current queue name or 'None'"
+  queue_position: "Position in queue or 'N/A'"
+  player_name: "Player's display name"
+  server_name: "Current server name"

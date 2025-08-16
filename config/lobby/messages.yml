@@ -1,0 +1,95 @@
+# Lobby Plugin Messages Configuration
+# ===================================
+
+# Prefixes
+prefix: "&8[&bLobby&8] &7"
+error-prefix: "&8[&cLobby&8] &c"
+success-prefix: "&8[&aLobby&8] &a"
+
+# Join/Leave Messages
+join-message: "&8[&a+&8] &7{player} &ajoined the lobby"
+leave-message: "&8[&c-&8] &7{player} &cleft the lobby"
+
+# Commands
+commands:
+  no-permission: "&cYou don't have permission to use this command!"
+  player-only: "&cThis command can only be used by players!"
+  usage: "&cUsage: {usage}"
+  reload-success: "&aConfiguration reloaded successfully!"
+  
+  # Spawn
+  spawn-set: "&aSpawn location set successfully!"
+  spawn-teleport: "&aTeleported to spawn!"
+  
+  # Fly
+  fly-enabled: "&aFly mode enabled!"
+  fly-disabled: "&cFly mode disabled!"
+  
+  # Queue
+  queue-joined: "&aYou joined the {queue} queue! &7(Position: #{position})"
+  queue-left: "&cYou left the {queue} queue!"
+  queue-not-in: "&cYou are not in any queue!"
+  queue-not-found: "&cQueue '{queue}' not found!"
+  queue-paused: "&eQueue '{queue}' has been paused!"
+  queue-unpaused: "&aQueue '{queue}' has been unpaused!"
+  queue-already-paused: "&cQueue '{queue}' is already paused!"
+  queue-already-unpaused: "&cQueue '{queue}' is already running!"
+  
+  # Build Mode
+  build-enabled: "&aBuild mode enabled!"
+  build-disabled: "&cBuild mode disabled!"
+  
+  # Player Visibility
+  visibility-all: "&aShowing all players!"
+  visibility-staff: "&eShowing staff only!"
+  visibility-none: "&cHiding all players!"
+  
+  # Scoreboard
+  scoreboard-enabled: "&aScoreboard enabled!"
+  scoreboard-disabled: "&cScoreboard disabled!"
+
+# Menu Titles
+menus:
+  servers: "&8Server Selector"
+  visibility: "&8Player Visibility"
+
+# Items
+items:
+  server-selector: "&bServer Selector"
+  player-visibility: "&ePlayer Visibility"
+  leave-server: "&cLeave Server"
+
+# Gadgets
+gadgets:
+  flying-pearl:
+    name: "&bFlying Pearl"
+    description:
+      - "&7Right-click to throw a flying pearl!"
+      - "&7Left-click to change mode:"
+      - "&8• &aNormal: &7Teleport on impact"
+      - "&8• &eFollow: &7Follow the pearl"
+    mode-normal: "&aMode: Normal"
+    mode-follow: "&eMode: Follow"
+
+# Queue System
+queue:
+  priority:
+    1: "&c[VIP+]"
+    2: "&6[VIP]"
+    3: "&a[Member]"
+  
+  full: "&cThe {server} queue is currently full!"
+  connecting: "&aConnecting you to {server}..."
+  failed: "&cFailed to connect to {server}. Please try again!"
+
+# Protection Messages
+protection:
+  block-break: "&cYou cannot break blocks in the lobby!"
+  block-place: "&cYou cannot place blocks in the lobby!"
+  item-drop: "&cYou cannot drop items in the lobby!"
+  item-pickup: "&cYou cannot pick up items in the lobby!"
+  damage: "&cYou cannot take damage in the lobby!"
+  chat: "&cYou cannot chat in the lobby!"
+  portal: "&cPortals are disabled in the lobby!"
+  inventory-move: "&cYou cannot move items in menus!"
+  interaction: "&cYou cannot interact with that!"

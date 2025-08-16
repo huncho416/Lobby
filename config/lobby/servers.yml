@@ -1,0 +1,99 @@
+# Lobby Plugin Servers Configuration
+# ==================================
+
+# Server Menu Settings
+servers-menu:
+  title: "&8Server Selector"
+  size: 27 # 9, 18, 27, 36, 45, 54
+  
+  # Menu Items
+  items:
+    # Practice Server
+    practice:
+      slot: 10
+      material: "DIAMOND_SWORD"
+      name: "&b&lPractice"
+      lore:
+        - "&7Fight other players in various"
+        - "&7game modes and improve your PvP skills!"
+        - ""
+        - "&aOnline: &f{practice_online}"
+        - "&aStatus: &f{practice_status}"
+        - ""
+        - "&eClick to join!"
+      server: "practice"
+      
+    # Survival Server  
+    survival:
+      slot: 12
+      material: "GRASS_BLOCK"
+      name: "&a&lSurvival"
+      lore:
+        - "&7Experience vanilla Minecraft"
+        - "&7survival with friends!"
+        - ""
+        - "&aOnline: &f{survival_online}"
+        - "&aStatus: &f{survival_status}"
+        - ""
+        - "&eClick to join!"
+      server: "survival"
+      
+    # Creative Server
+    creative:
+      slot: 14
+      material: "BARRIER"
+      name: "&d&lCreative"
+      lore:
+        - "&7Build amazing structures"
+        - "&7with unlimited resources!"
+        - ""
+        - "&aOnline: &f{creative_online}"
+        - "&aStatus: &f{creative_status}"
+        - ""
+        - "&eClick to join!"
+      server: "creative"
+      
+    # Minigames Server
+    minigames:
+      slot: 16
+      material: "GOLD_INGOT"
+      name: "&6&lMinigames"
+      lore:
+        - "&7Play various fun minigames"
+        - "&7with other players!"
+        - ""
+        - "&aOnline: &f{minigames_online}"
+        - "&aStatus: &f{minigames_status}"
+        - ""
+        - "&eClick to join!"
+      server: "minigames"
+
+# Server Definitions
+servers:
+  practice:
+    name: "Practice"
+    ip: "practice.example.com"
+    port: 25565
+    max-players: 100
+    queue-enabled: true
+    
+  survival:
+    name: "Survival"
+    ip: "survival.example.com"
+    port: 25565
+    max-players: 50
+    queue-enabled: false
+    
+  creative:
+    name: "Creative"
+    ip: "creative.example.com"
+    port: 25565
+    max-players: 30
+    queue-enabled: false
+    
+  minigames:
+    name: "Minigames"
+    ip: "minigames.example.com"
+    port: 25565
+    max-players: 80
+    queue-enabled: true

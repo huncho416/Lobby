@@ -1,0 +1,48 @@
+# Lobby Plugin Queues Configuration
+# =================================
+
+# Queue System Settings
+queue-system:
+  enabled: true
+  max-position-display: 100
+  update-interval: 5 # seconds
+  
+  # Priority levels (1 = highest priority)
+  priority-levels:
+    1: "queue.priority.1"
+    2: "queue.priority.2"
+    3: "queue.priority.3"
+    4: "queue.priority.4"
+    5: "queue.priority.5"
+    # ... continues to 50
+
+# Server Queues
+queues:
+  practice:
+    enabled: true
+    max-players: 100
+    auto-send: true
+    send-delay: 5 # seconds
+    priority-slots: 20 # reserved for priority players
+    
+  minigames:
+    enabled: true
+    max-players: 80
+    auto-send: true
+    send-delay: 3
+    priority-slots: 15
+    
+  survival:
+    enabled: false
+    
+  creative:
+    enabled: false
+
+# Queue Messages
+messages:
+  position-update: "&7Queue position: &e#{position} &8| &7ETA: &e{eta}"
+  server-full: "&cThe {server} server is currently full. You have been added to the queue."
+  connecting: "&aConnecting you to {server}..."
+  failed-connect: "&cFailed to connect to {server}. You have been moved back to position #{position}."
+  queue-paused: "&eThe {server} queue is currently paused."
+  queue-disabled: "&cThe {server} queue is currently disabled."
