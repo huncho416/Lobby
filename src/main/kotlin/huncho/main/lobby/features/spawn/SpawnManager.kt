@@ -4,8 +4,6 @@ import huncho.main.lobby.LobbyPlugin
 import huncho.main.lobby.utils.MessageUtils
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.Player
-import kotlinx.coroutines.runBlocking
-import org.bson.Document
 
 class SpawnManager(private val plugin: LobbyPlugin) {
     
@@ -16,25 +14,11 @@ class SpawnManager(private val plugin: LobbyPlugin) {
     }
     
     /**
-     * Load spawn location from database
+     * Load spawn location from config
      */
     private fun loadSpawnLocation() {
-        runBlocking {
-            val spawnData = plugin.mongoManager.getLobbyData("spawn")
-            if (spawnData != null) {
-                val x = spawnData.getDouble("x") ?: 0.5
-                val y = spawnData.getDouble("y") ?: 65.0
-                val z = spawnData.getDouble("z") ?: 0.5
-                val yaw = spawnData.getDouble("yaw")?.toFloat() ?: 0.0f
-                val pitch = spawnData.getDouble("pitch")?.toFloat() ?: 0.0f
-                
-                spawnLocation = Pos(x, y, z, yaw, pitch)
-                LobbyPlugin.logger.info("Loaded spawn location: $spawnLocation")
-            } else {
-                // Use default spawn from config
-                loadDefaultSpawn()
-            }
-        }
+        // Always use config spawn location since we removed database dependency
+        loadDefaultSpawn()
     }
     
     /**
@@ -42,11 +26,11 @@ class SpawnManager(private val plugin: LobbyPlugin) {
      */
     private fun loadDefaultSpawn() {
         val config = plugin.configManager.mainConfig
-        val x = plugin.configManager.getString(config, "lobby.spawn.x", "0.5").toDoubleOrNull() ?: 0.5
-        val y = plugin.configManager.getString(config, "lobby.spawn.y", "65.0").toDoubleOrNull() ?: 65.0
-        val z = plugin.configManager.getString(config, "lobby.spawn.z", "0.5").toDoubleOrNull() ?: 0.5
-        val yaw = plugin.configManager.getString(config, "lobby.spawn.yaw", "0.0").toFloatOrNull() ?: 0.0f
-        val pitch = plugin.configManager.getString(config, "lobby.spawn.pitch", "0.0").toFloatOrNull() ?: 0.0f
+        val x = plugin.configManager.getDouble(config, "spawn.x", 0.5)
+        val y = plugin.configManager.getDouble(config, "spawn.y", 65.0)
+        val z = plugin.configManager.getDouble(config, "spawn.z", 0.5)
+        val yaw = plugin.configManager.getDouble(config, "spawn.yaw", 0.0).toFloat()
+        val pitch = plugin.configManager.getDouble(config, "spawn.pitch", 0.0).toFloat()
         
         spawnLocation = Pos(x, y, z, yaw, pitch)
         LobbyPlugin.logger.info("Using default spawn location: $spawnLocation")
@@ -79,19 +63,9 @@ class SpawnManager(private val plugin: LobbyPlugin) {
     private fun saveSpawnLocation() {
         val location = spawnLocation ?: return
         
-        runBlocking {
-            val spawnData = Document().apply {
-                append("x", location.x)
-                append("y", location.y)
-                append("z", location.z)
-                append("yaw", location.yaw)
-                append("pitch", location.pitch)
-                append("lastUpdated", System.currentTimeMillis())
-            }
-            
-            plugin.mongoManager.saveLobbyData("spawn", spawnData)
-            LobbyPlugin.logger.info("Saved spawn location: $location")
-        }
+        // Note: Spawn location is now saved to config file only
+        // Database storage removed - use HTTP API for persistence if needed
+        LobbyPlugin.logger.info("Spawn location set: $location (config file update required manually)")
     }
     
     /**
@@ -117,8 +91,7 @@ class SpawnManager(private val plugin: LobbyPlugin) {
      */
     fun teleportToSpawnWithMessage(player: Player) {
         teleportToSpawn(player)
-        val message = plugin.configManager.getString(plugin.configManager.messagesConfig, "commands.spawn-teleport")
-        MessageUtils.sendMessage(player, message)
+        MessageUtils.sendMessage(player, "&aTeleported to spawn!")
     }
     
     /**

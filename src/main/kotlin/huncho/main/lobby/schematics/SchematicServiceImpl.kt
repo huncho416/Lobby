@@ -46,15 +46,11 @@ class SchematicServiceImpl(
                     return@withContext null
                 }
                 
-                logger.info("Loading schematic from file: ${file.name}")
                 val startTime = System.currentTimeMillis()
                 
                 FileInputStream(file).use { inputStream ->
                     val schematic = net.hollowcube.schem.SchematicReader().read(inputStream)
                     val loadTime = System.currentTimeMillis() - startTime
-                    
-                    logger.info("Successfully loaded schematic '${file.name}' in ${loadTime}ms " +
-                        "(${schematic.size().x()}x${schematic.size().y()}x${schematic.size().z()})")
                     
                     SchematicHandle(
                         name = file.nameWithoutExtension,
@@ -77,7 +73,6 @@ class SchematicServiceImpl(
             cache[configName]?.let { cached ->
                 hitCount.incrementAndGet()
                 updateCacheOrder(configName)
-                logger.debug("Loaded schematic '$configName' from cache")
                 return cached
             }
             missCount.incrementAndGet()
@@ -130,7 +125,6 @@ class SchematicServiceImpl(
     ): PasteResult {
         return withContext(if (options.async) Dispatchers.IO else Dispatchers.Unconfined) {
             try {
-                logger.info("Pasting schematic '${handle.name}' with options: $options")
                 val startTime = System.currentTimeMillis()
                 
                 val origin = options.origin ?: Pos(0.0, 64.0, 0.0)
@@ -157,8 +151,7 @@ class SchematicServiceImpl(
                 }
                 
                 val timeTaken = System.currentTimeMillis() - startTime
-                logger.info("Successfully pasted schematic '${handle.name}' - " +
-                    "$blocksPlaced blocks placed in ${timeTaken}ms")
+                // Success logged by SchematicManager
                 
                 PasteResult.success(blocksPlaced, timeTaken, handle)
                 
@@ -205,7 +198,6 @@ class SchematicServiceImpl(
         synchronized(cacheOrder) {
             cacheOrder.clear()
         }
-        logger.info("Schematic cache cleared")
     }
     
     override fun clearCache(configName: String) {
@@ -213,7 +205,6 @@ class SchematicServiceImpl(
         synchronized(cacheOrder) {
             cacheOrder.remove(configName)
         }
-        logger.debug("Cleared schematic '$configName' from cache")
     }
     
     override fun getCacheStats(): CacheStats {
@@ -230,7 +221,6 @@ class SchematicServiceImpl(
     }
     
     override suspend fun reload() {
-        logger.info("Reloading schematics...")
         clearCache()
         
         // Pre-load configured schematics if enabled
@@ -242,15 +232,12 @@ class SchematicServiceImpl(
                 if (enabled) {
                     try {
                         loadSchematic(name)
-                        logger.debug("Pre-loaded schematic: $name")
                     } catch (e: Exception) {
                         logger.warn("Failed to pre-load schematic '$name'", e)
                     }
                 }
             }
         }
-        
-        logger.info("Schematics reloaded - ${cache.size} schematics cached")
     }
     
     private fun addToCache(name: String, handle: SchematicHandle) {
@@ -269,7 +256,6 @@ class SchematicServiceImpl(
             while (cache.size > maxCacheSize && cacheOrder.isNotEmpty()) {
                 val oldest = cacheOrder.removeAt(0)
                 cache.remove(oldest)
-                logger.debug("Evicted schematic '$oldest' from cache (LRU)")
             }
         }
     }
@@ -290,6 +276,5 @@ class SchematicServiceImpl(
     fun shutdown() {
         coroutineScope.cancel()
         clearCache()
-        logger.info("SchematicService shutdown complete")
     }
 }

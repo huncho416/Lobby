@@ -10,6 +10,18 @@ import net.minestom.server.entity.Player
 class HubCoreCommand(private val plugin: LobbyPlugin) : Command("hubcore") {
     
     init {
+        setCondition { sender, _ ->
+            when (sender) {
+                is Player -> try {
+                    plugin.radiumIntegration.hasPermission(sender.uuid, "lobby.admin").get() ||
+                    plugin.radiumIntegration.hasPermission(sender.uuid, "hub.admin").get()
+                } catch (e: Exception) {
+                    false
+                }
+                else -> true // Allow console
+            }
+        }
+        
         setDefaultExecutor { sender, _ ->
             if (sender !is Player) {
                 sender.sendMessage("This command can only be used by players!")

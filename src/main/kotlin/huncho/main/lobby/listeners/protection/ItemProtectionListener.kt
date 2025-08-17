@@ -14,12 +14,19 @@ class ItemProtectionListener(private val plugin: LobbyPlugin) : EventListener<It
         val player = event.player
         
         // Check if item dropping is disabled
-        if (plugin.configManager.getBoolean(plugin.configManager.mainConfig, "protection.item-drop")) {
+        if (plugin.configManager.getBoolean(plugin.configManager.mainConfig, "protection.anti_drop")) {
             // Check bypass permission
-            if (!plugin.radiumIntegration.hasPermission(player.uuid, "hub.options.bypass.drop").get()) {
-                val message = plugin.configManager.getString(plugin.configManager.messagesConfig, "protection.item-drop")
+            val hasBypass = try {
+                plugin.radiumIntegration.hasPermission(player.uuid, "lobby.bypass.drop").get() ||
+                plugin.radiumIntegration.hasPermission(player.uuid, "lobby.admin").get()
+            } catch (e: Exception) {
+                false
+            }
+            
+            if (!hasBypass) {
+                val message = plugin.configManager.getString(plugin.configManager.messagesConfig, "messages.protection.item_drop", "&cYou cannot drop items here!")
                 MessageUtils.sendMessage(player, message)
-                return EventListener.Result.SUCCESS
+                return EventListener.Result.INVALID
             }
         }
         
@@ -42,12 +49,19 @@ class ItemPickupListener(private val plugin: LobbyPlugin) : EventListener<Pickup
         val player = entity as net.minestom.server.entity.Player
         
         // Check if item pickup is disabled
-        if (plugin.configManager.getBoolean(plugin.configManager.mainConfig, "protection.item-pickup")) {
+        if (plugin.configManager.getBoolean(plugin.configManager.mainConfig, "protection.anti_pickup")) {
             // Check bypass permission
-            if (!plugin.radiumIntegration.hasPermission(player.uuid, "hub.options.bypass.pick").get()) {
-                val message = plugin.configManager.getString(plugin.configManager.messagesConfig, "protection.item-pickup")
+            val hasBypass = try {
+                plugin.radiumIntegration.hasPermission(player.uuid, "lobby.bypass.pickup").get() ||
+                plugin.radiumIntegration.hasPermission(player.uuid, "lobby.admin").get()
+            } catch (e: Exception) {
+                false
+            }
+            
+            if (!hasBypass) {
+                val message = plugin.configManager.getString(plugin.configManager.messagesConfig, "messages.protection.item_pickup", "&cYou cannot pickup items here!")
                 MessageUtils.sendMessage(player, message)
-                event.isCancelled = true
+                return EventListener.Result.INVALID
             }
         }
         

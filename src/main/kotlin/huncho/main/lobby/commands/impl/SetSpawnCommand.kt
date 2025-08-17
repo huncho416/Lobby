@@ -9,22 +9,40 @@ import net.minestom.server.entity.Player
 class SetSpawnCommand(private val plugin: LobbyPlugin) : Command("setspawn") {
     
     init {
+        setCondition { sender, _ ->
+            if (sender !is Player) return@setCondition true // Allow console
+            
+            try {
+                val hasSetSpawn = plugin.radiumIntegration.hasPermission(sender.uuid, "radium.command.setspawn").get()
+                val hasLobbyAdmin = plugin.radiumIntegration.hasPermission(sender.uuid, "lobby.admin").get()
+                return@setCondition hasSetSpawn || hasLobbyAdmin
+            } catch (e: Exception) {
+                LobbyPlugin.logger.debug("Permission check failed for ${sender.username}: ${e.message}")
+                return@setCondition false
+            }
+        }
+        
         setDefaultExecutor { sender, _ ->
             if (sender !is Player) {
                 sender.sendMessage("This command can only be used by players!")
                 return@setDefaultExecutor
             }
             
-            val player = sender as Player
-            player.checkPermissionAndExecute("hub.command.setspawn") {
-                if (plugin.spawnManager.setSpawnLocation(player)) {
-                    val message = plugin.configManager.getString(plugin.configManager.messagesConfig, "commands.spawn-set")
-                    MessageUtils.sendMessage(player, message)
+            plugin.radiumIntegration.hasPermission(sender.uuid, "radium.command.setspawn").thenAccept { hasSetSpawn ->
+                plugin.radiumIntegration.hasPermission(sender.uuid, "lobby.admin").thenAccept adminCheck@{ hasAdmin ->
+                    if (!hasSetSpawn && !hasAdmin) {
+                        MessageUtils.sendMessage(sender, "&cYou don't have permission to use this command!")
+                        return@adminCheck
+                    }
                     
-                    val spawnInfo = plugin.spawnManager.getSpawnInfo()
-                    MessageUtils.sendMessage(player, "&7Location: &b${spawnInfo["x"]}, ${spawnInfo["y"]}, ${spawnInfo["z"]}")
-                } else {
-                    MessageUtils.sendMessage(player, "&cFailed to set spawn location!")
+                    if (plugin.spawnManager.setSpawnLocation(sender)) {
+                        MessageUtils.sendMessage(sender, "&aSpawn location set!")
+                        
+                        val spawnInfo = plugin.spawnManager.getSpawnInfo()
+                        MessageUtils.sendMessage(sender, "&7Location: &b${spawnInfo["x"]}, ${spawnInfo["y"]}, ${spawnInfo["z"]}")
+                    } else {
+                        MessageUtils.sendMessage(sender, "&cFailed to set spawn location!")
+                    }
                 }
             }
         }

@@ -24,6 +24,9 @@ class EventManager(private val plugin: LobbyPlugin) {
         eventHandler.addListener(InventoryProtectionListener(plugin))
         eventHandler.addListener(PortalProtectionListener(plugin))
         
+        // Additional protection for lobby items (swap protection only)
+        eventHandler.addListener(HotbarProtectionListener(plugin))
+        
         // Feature listeners
         eventHandler.addListener(DoubleJumpListener(plugin))
         eventHandler.addListener(LaunchPadListener(plugin))

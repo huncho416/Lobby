@@ -62,22 +62,10 @@ class ServerSelectorMenu(private val plugin: LobbyPlugin) {
     private fun processServerPlaceholders(text: String, serverName: String): String {
         var result = text
         
-        // Get cached server status (if Redis is enabled)
-        val redisManager = plugin.redisManager
-        if (redisManager != null) {
-            val status = redisManager.getCachedServerStatus(serverName)
-            if (status != null) {
-                result = result.replace("{${serverName}_online}", status["online"].toString())
-                result = result.replace("{${serverName}_status}", status["status"].toString())
-            } else {
-                result = result.replace("{${serverName}_online}", "?")
-                result = result.replace("{${serverName}_status}", "Unknown")
-            }
-        } else {
-            // Redis not available, use default values or get from Radium API
-            result = result.replace("{${serverName}_online}", "?")
-            result = result.replace("{${serverName}_status}", "Online")
-        }
+        // Since Redis is disabled, use default/fallback values
+        // TODO: Could be enhanced to query server status via HTTP API
+        result = result.replace("{${serverName}_online}", "?")
+        result = result.replace("{${serverName}_status}", "Online")
         
         return result
     }

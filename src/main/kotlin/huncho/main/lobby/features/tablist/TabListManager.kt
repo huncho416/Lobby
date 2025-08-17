@@ -42,7 +42,7 @@ class TabListManager(private val plugin: LobbyPlugin) {
             try {
                 // Set header and footer - this is safe and won't conflict with Radium
                 val header = getTabListHeader()
-                val footer = getTabListFooter()
+                val footer = getTabListFooter(player)
                 
                 player.sendPlayerListHeaderAndFooter(
                     MessageUtils.colorize(header.joinToString("\n")),
@@ -80,17 +80,17 @@ class TabListManager(private val plugin: LobbyPlugin) {
     private fun getTabListHeader(): List<String> {
         val headerLines = plugin.configManager.getList(plugin.configManager.mainConfig, "tablist.header")
         return headerLines.filterIsInstance<String>().map { line ->
-            replacePlaceholders(line)
+            replacePlaceholders(line, null)
         }
     }
     
     /**
      * Get the tab list footer with placeholders replaced
      */
-    private fun getTabListFooter(): List<String> {
+    private fun getTabListFooter(player: Player? = null): List<String> {
         val footerLines = plugin.configManager.getList(plugin.configManager.mainConfig, "tablist.footer")
         return footerLines.filterIsInstance<String>().map { line ->
-            replacePlaceholders(line)
+            replacePlaceholders(line, player)
         }
     }
     
@@ -167,14 +167,38 @@ class TabListManager(private val plugin: LobbyPlugin) {
     /**
      * Replace placeholders in tab list text
      */
-    private fun replacePlaceholders(text: String): String {
+    private fun replacePlaceholders(text: String, player: Player? = null): String {
         var result = text
         
         // Replace basic placeholders
         result = result.replace("%online_players%", MinecraftServer.getConnectionManager().onlinePlayerCount.toString())
         result = result.replace("%max_players%", "100") // Or get from config
         
-        // Add more placeholders as needed
+        // Player-specific placeholders
+        if (player != null) {
+            result = result.replace("%ping%", player.latency.toString())
+            result = result.replace("%player_name%", player.username)
+        } else {
+            // Fallback for non-player specific placeholders
+            result = result.replace("%ping%", "0")
+            result = result.replace("%player_name%", "Unknown")
+        }
+        
+        // Server-specific placeholders
+        result = result.replace("%server_name%", "Lobby")
+        
+        // Global player count - try to get from Radium, fallback to local count
+        try {
+            // Attempt to get global player count from Radium
+            val servers = plugin.radiumIntegration.getServerList().join()
+            val globalCount = servers.sumOf { it.playerCount }
+            result = result.replace("%global_players%", globalCount.toString())
+        } catch (e: Exception) {
+            // Fallback to local count if Radium is unavailable
+            val localCount = MinecraftServer.getConnectionManager().onlinePlayerCount
+            result = result.replace("%global_players%", localCount.toString())
+        }
+        
         return result
     }
     

@@ -8,22 +8,19 @@ radium:
     default_rank: "Default"
     default_prefix: "&7"
 
-database:
-  mongodb:
-    connection_string: "mongodb://radium:radium123@localhost:27017"
-    database_name: "lobby"
-  redis:
-    enabled: false  # Disabled since we're using Radium HTTP API
-    host: "localhost"
-    port: 6379
-    password: "radium123"
-    database: 0
+# HTTP API for gamemode synchronization with Radium proxy
+http_api:
+  enabled: true
+  host: "0.0.0.0"
+  port: 8081  # Use 8081 since Radium uses 8080
+  endpoints:
+    gamemode: "/api/gamemode"
 
 spawn:
   world: "lobby"
-  x: 0.5
-  y: 100.0
-  z: 0.5
+  x: 110.0
+  y: 78.0
+  z: 65.0
   yaw: 0.0
   pitch: 0.0
 
@@ -48,10 +45,7 @@ schematics:
 lobby:
   join-items:
     "0": "COMPASS:&bServer Selector"
-    "1": "REDSTONE:&ePlayer Visibility" 
-    "4": "NETHER_STAR:&6Lobby Items"
-    "7": "BOOK:&aServer Info"
-    "8": "BARRIER:&cLeave Server"
+    "1": "REDSTONE:&ePlayer Visibility"
 
 queue:
   enabled: true
@@ -71,40 +65,46 @@ queue:
 
 scoreboard:
   enabled: true
-  title: "&dMythic&fPvP"  # Light pink "Mythic" + white "PvP"
+  title: "&d&lMythicPvP"  # Light pink and bold "MythicPvP"
+  servers:
+    prison: 42      # Mock player count
+    gens: 28        # Mock player count  
+    skyblock: 35    # Mock player count
+    dungeons: 15    # Mock player count
   lines:
-    # Bottom to top order (higher line numbers appear higher on scoreboard)
-    - "&dplay.mythicpvp.net"  # Server IP (bottom line - light pink)
-    - "%date%"  # Current date (white)
-    - ""  # Empty line
-    - " ▌ &aSkyblock &2[%skyblock_players%]"  # Light green "Skyblock" + dark green player count
-    - " ▌ &cGens &4[%gens_players%]"  # Light red "Gens" + dark red player count  
-    - " ▌ &bPrison &1[%prison_players%]"  # Light blue "Prison" + dark blue player count
-    - " ▌ &dServers"  # Light pink "Servers" header
-    - ""  # Empty line
-    - " ▌ &7Server: &f%current_server%"  # Gray "Server:" + white server name
-    - " ▌ &7Player: &f%player_name%"  # Gray "Player:" + white player name
-    - " ▌ &dInformation"  # Light pink "Information" header
-    - ""  # Empty line
-    - "&7      Lobby Server      "  # Centered gray text right under title
+    # Exact format from top to bottom as displayed
+    - "&8      Lobby Server      "        # Right under title: Dark grey centered text
+    - ""                                  # Blank line
+    - "&5┃ &dInformation"                 # Purple "┃" + light pink "Information" header
+    - "&5┃ &7Player: &f%player_name%"     # Purple "┃" + gray "Player:" + white player name
+    - "&5┃ &7Server: &f%current_server%"  # Purple "┃" + gray "Server:" + white server name
+    - ""                                  # Blank line
+    - "&5┃ &dServers"                     # Purple "┃" + pink "Servers" header
+    - "&5┃ &eSkyblock &6[%skyblock_players%]" # Purple "┃" + yellow "Skyblock" + gold player count
+    - "&5┃ &bPrison &1[%prison_players%]" # Purple "┃" + light blue "Prison" + dark blue player count
+    - "&5┃ &aGens &2[%gens_players%]"     # Purple "┃" + light green "Gens" + dark green player count
+    - "&5┃ &cDungeons &4[%dungeons_players%]"  # Purple "┃" + light red "Dungeons" + dark red player count
+    - ""                                  # Blank line
+    - "&dmythicpvp.net"                   # Bottom: Server IP in light pink
 
-# Tab list formatting - respects Radium prefixes
+# Tab list formatting - matches MythicHub exactly
 tablist:
   enabled: true
   header:
     - ""
-    - "&d&lMythic&f&lPvP"
-    - "&7play.mythicpvp.net"
+    - "     &d&lMYTHIC&f&lPVP"            # Centered bold title with proper spacing
+    - ""                                  # Blank line
+    - "     Connected to: %server_name%"  # Connected to line with server name
+    - "      play.mythicpvp.net"          # Server IP in gray
     - ""
   footer:
     - ""
-    - "&7Online: &f%online_players%"
-    - "&7Server: &fLobby"
+    - "&5Hub &8// &f%ping% &8* &dstore.mythicpvp.net"
+    - "&d%global_players% &fGlobal"
     - ""
-  # Player name formatting (only applies if Radium doesn't provide formatting)
-  fallback_format: "&7%player_name%"
-  # Don't override Radium formatting
-  respect_radium_formatting: true
+  # Player name formatting using Radium integration
+  player_format: "%prefix%%color%%player%"  # Radium format: prefix + color + player name
+  fallback_format: "&7%player_name%"        # Fallback for players without ranks
 
 # World lighting and weather - keeps lobby bright
 world_lighting:
@@ -149,6 +149,13 @@ messages:
     reload_failed: "&cFailed to reload schematics: %error%"
     no_permission: "&cYou don't have permission to use schematic commands!"
   
+  # Punishment messages
+  punishment:
+    executing: "&7Executing command..."
+    failed: "&cFailed to execute punishment command: %error%"
+    api_offline: "&cUnable to connect to Radium punishment system"
+    invalid_duration: "&cInvalid duration format. Examples: 1d, 2h, 30m, 1w"
+  
   # Protection messages
   protection:
     block_break: "&cYou cannot break blocks here!"
@@ -187,3 +194,9 @@ server:
     enabled: true
     secret: "radium-velocity-secret"  # Should match velocity.toml forwarding-secret
   bind_address: "0.0.0.0"
+  
+  # HTTP API for gamemode synchronization
+  api:
+    enabled: true
+    port: 8081  # Different port from main server
+    bind_address: "0.0.0.0"

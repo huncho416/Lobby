@@ -101,9 +101,23 @@ class PlayerJoinListener(private val plugin: LobbyPlugin) : EventListener<Player
                 val itemStr = itemData.toString()
                 val parts = itemStr.split(":", limit = 2)
                 val materialName = parts[0].uppercase()
-                val material = Material.values().find { it.name() == materialName }
+                
+                // Try to find material by name (try both with and without minecraft namespace)
+                var material = Material.values().find { it.name() == materialName }
+                if (material == null) {
+                    // Try with lowercase and minecraft namespace
+                    material = Material.values().find { it.name() == "minecraft:${materialName.lowercase()}" }
+                }
+                
                 if (material == null) {
                     LobbyPlugin.logger.warn("Invalid material: $materialName")
+                    // Log some common materials that might work instead
+                    val suggestions = Material.values().filter { 
+                        it.name().contains(materialName, ignoreCase = true)
+                    }.take(5).map { it.name() }
+                    if (suggestions.isNotEmpty()) {
+                        LobbyPlugin.logger.info("Did you mean one of these? $suggestions")
+                    }
                     return@forEach
                 }
                 

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- Console appender with a clean format -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} -- %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Reduce noise from Jetty/Javalin -->
+    <logger name="org.eclipse.jetty" level="WARN"/>
+    <logger name="io.javalin" level="INFO"/>
+    <logger name="org.eclipse.jetty.util.component" level="WARN"/>
+    <logger name="org.eclipse.jetty.server" level="INFO"/>
+    <logger name="org.eclipse.jetty.http" level="WARN"/>
+    <logger name="org.eclipse.jetty.io" level="WARN"/>
+    <logger name="org.eclipse.jetty.util" level="WARN"/>
+    <logger name="org.eclipse.jetty.servlet" level="WARN"/>
+    <logger name="org.eclipse.jetty.websocket" level="WARN"/>
+    
+    <!-- Reduce MongoDB driver noise -->
+    <logger name="org.mongodb.driver" level="WARN"/>
+    
+    <!-- Reduce schematic logging noise -->
+    <logger name="huncho.main.lobby.schematics.SchematicServiceImpl" level="WARN"/>
+    <logger name="huncho.main.lobby.managers.SchematicManager" level="WARN"/>
+    
+    <!-- Keep our application logs at INFO level -->
+    <logger name="huncho.main.lobby" level="INFO"/>
+    
+    <!-- Root logger -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>

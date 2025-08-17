@@ -38,7 +38,6 @@ class SchematicManager(
             
             val enabled = schematicsConfig["enabled"] as? Boolean ?: false
             if (!enabled) {
-                logger.info("Schematics are disabled in configuration")
                 return
             }
             
@@ -48,7 +47,6 @@ class SchematicManager(
             val schematicsDir = File(dataFolder, "schematics")
             if (!schematicsDir.exists()) {
                 schematicsDir.mkdirs()
-                logger.info("Created schematics directory: ${schematicsDir.absolutePath}")
             }
             
             // Initialize service
@@ -57,7 +55,7 @@ class SchematicManager(
             // Pre-load schematics
             _schematicService?.reload()
             
-            logger.info("Schematic service initialized successfully")
+            // Success will be logged when schematics are actually pasted
             
         } catch (e: Exception) {
             logger.error("Failed to initialize schematic manager", e)
@@ -79,13 +77,10 @@ class SchematicManager(
             val pasteOnStartup = schematicsConfig["paste_on_startup"] as? Boolean ?: false
             
             if (!pasteOnStartup) {
-                logger.debug("Startup schematic pasting is disabled")
                 return
             }
             
             val filesConfig = schematicsConfig["files"] as? Map<String, Any> ?: return
-            
-            logger.info("Pasting startup schematics...")
             
             var pastedCount = 0
             var totalBlocks = 0
@@ -95,20 +90,14 @@ class SchematicManager(
                 if (config !is Map<*, *>) continue
                 
                 val enabled = config["enabled"] as? Boolean ?: true
-                if (!enabled) {
-                    logger.debug("Skipping disabled schematic: $name")
-                    continue
-                }
+                if (!enabled) continue
                 
                 try {
-                    logger.info("Pasting startup schematic: $name")
                     val result = service.pasteSchematic(instance, name)
                     
                     if (result.success) {
                         pastedCount++
                         totalBlocks += result.blocksPlaced
-                        logger.info("Successfully pasted startup schematic '$name' - " +
-                            "${result.blocksPlaced} blocks in ${result.timeTaken}ms")
                     } else {
                         logger.error("Failed to paste startup schematic '$name': ${result.error}")
                     }
@@ -121,8 +110,8 @@ class SchematicManager(
             val totalTime = System.currentTimeMillis() - startTime
             
             if (pastedCount > 0) {
-                logger.info("Startup schematic pasting complete - " +
-                    "$pastedCount schematics pasted, $totalBlocks total blocks in ${totalTime}ms")
+                // Green success message
+                println("\u001B[32m✓ Successfully loaded $pastedCount schematics ($totalBlocks blocks)\u001B[0m")
             } else {
                 logger.warn("No startup schematics were pasted successfully")
             }

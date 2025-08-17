@@ -3,35 +3,48 @@ package huncho.main.lobby.listeners.protection
 import huncho.main.lobby.LobbyPlugin
 import huncho.main.lobby.utils.MessageUtils
 import net.minestom.server.event.EventListener
-import net.minestom.server.event.inventory.InventoryClickEvent
-import net.minestom.server.inventory.click.ClickType
+import net.minestom.server.event.inventory.InventoryPreClickEvent
 import net.minestom.server.inventory.AbstractInventory
+import net.minestom.server.item.ItemStack
 
-class InventoryProtectionListener(private val plugin: LobbyPlugin) : EventListener<InventoryClickEvent> {
+class InventoryProtectionListener(private val plugin: LobbyPlugin) : EventListener<InventoryPreClickEvent> {
     
-    override fun eventType(): Class<InventoryClickEvent> = InventoryClickEvent::class.java
+    override fun eventType(): Class<InventoryPreClickEvent> = InventoryPreClickEvent::class.java
     
-    override fun run(event: InventoryClickEvent): EventListener.Result {
+    override fun run(event: InventoryPreClickEvent): EventListener.Result {
         val player = event.player
         val inventory = event.inventory
         
         // Check if inventory movement is disabled
-        if (plugin.configManager.getBoolean(plugin.configManager.mainConfig, "protection.inventory-move")) {
+        if (plugin.configManager.getBoolean(plugin.configManager.mainConfig, "protection.inventory_move")) {
             // Allow clicks in custom menus (server selector, gadgets, etc.)
             if (isCustomMenu(inventory)) {
                 return EventListener.Result.SUCCESS
             }
             
-            // Check bypass permission
-            if (!plugin.radiumIntegration.hasPermission(player.uuid, "hub.inv.bypass").get()) {
-                // Prevent moving items in player inventory
-                if (event.clickType == ClickType.LEFT_CLICK || 
-                    event.clickType == ClickType.RIGHT_CLICK ||
-                    event.clickType == ClickType.SHIFT_CLICK) {
-                    
-                    val message = plugin.configManager.getString(plugin.configManager.messagesConfig, "protection.inventory-move")
+            // Check bypass permission first
+            val hasBypass = try {
+                plugin.radiumIntegration.hasPermission(player.uuid, "lobby.bypass.inventory").get() ||
+                plugin.radiumIntegration.hasPermission(player.uuid, "lobby.admin").get()
+            } catch (e: Exception) {
+                false
+            }
+            
+            if (!hasBypass) {
+                // Check if this is trying to move a join item (compass or redstone)
+                val clickedItem = event.clickedItem
+                
+                if (isJoinItem(clickedItem)) {
+                    val message = plugin.configManager.getString(plugin.configManager.messagesConfig, "messages.protection.inventory_move", "&cYou cannot move lobby items!")
                     MessageUtils.sendMessage(player, message)
-                    return EventListener.Result.SUCCESS
+                    return EventListener.Result.INVALID
+                }
+                
+                // Prevent any inventory interactions if it's the player's own inventory
+                if (inventory == player.inventory) {
+                    val message = plugin.configManager.getString(plugin.configManager.messagesConfig, "messages.protection.inventory_move", "&cInventory interactions are disabled!")
+                    MessageUtils.sendMessage(player, message)
+                    return EventListener.Result.INVALID
                 }
             }
         }
@@ -39,34 +52,22 @@ class InventoryProtectionListener(private val plugin: LobbyPlugin) : EventListen
         return EventListener.Result.SUCCESS
     }
     
-    private fun isCustomMenu(inventory: AbstractInventory?): Boolean {
-        if (inventory == null) return false
+    private fun isJoinItem(item: ItemStack?): Boolean {
+        if (item == null || item.isAir) return false
         
-        // Check if this is a custom menu by checking inventory size and structure
-        // Our custom menus are typically 9-slot (visibility) or larger (server selector)
-        val size = inventory.size
+        val material = item.material()
+        // Check if it's a compass or redstone (join items)
+        return material.name().contains("COMPASS", ignoreCase = true) || 
+               material.name().contains("REDSTONE", ignoreCase = true)
+    }
+    
+    private fun isCustomMenu(inventory: AbstractInventory): Boolean {
+        // Custom menu detection logic (basic implementation)
+        // In a real implementation, you'd check specific menu titles or NBT data
         
-        // For 9-slot inventories (player visibility menu), check if it has items in slots 2, 4, 6
-        if (size == 9) {
-            val hasVisibilityPattern = inventory.getItemStack(2) != null && 
-                                     inventory.getItemStack(4) != null && 
-                                     inventory.getItemStack(6) != null
-            if (hasVisibilityPattern) return true
-        }
-        
-        // For larger inventories (server selector), check if slots match configured server slots
-        if (size >= 27) {
-            val items = plugin.configManager.getMap(plugin.configManager.serversConfig, "servers-menu.items")
-            val hasServerMenuPattern = items.values.any { itemData ->
-                val data = itemData as? Map<String, Any> ?: return@any false
-                val slot = when (val slotValue = data["slot"]) {
-                    is Int -> slotValue
-                    is String -> slotValue.toIntOrNull() ?: -1
-                    else -> -1
-                }
-                slot >= 0 && slot < size && inventory.getItemStack(slot) != null
-            }
-            if (hasServerMenuPattern) return true
+        // Check if inventory is not the player's main inventory
+        if (inventory.size != 36) {
+            return true // Likely a custom menu if it's not standard player inventory size
         }
         
         return false

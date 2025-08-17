@@ -1,8 +1,8 @@
 package huncho.main.lobby
 
 import huncho.main.lobby.config.ConfigManager
-import huncho.main.lobby.database.MongoManager
-import huncho.main.lobby.database.RedisManager
+import huncho.main.lobby.api.GamemodeAPI
+import huncho.main.lobby.api.RadiumCommandForwarder
 import huncho.main.lobby.listeners.EventManager
 import huncho.main.lobby.commands.CommandManager
 import huncho.main.lobby.features.queue.QueueManager
@@ -17,6 +17,7 @@ import huncho.main.lobby.integration.RadiumIntegration
 import kotlinx.coroutines.*
 import net.minestom.server.MinecraftServer
 import net.minestom.server.instance.InstanceContainer
+import net.minestom.server.instance.LightingChunk
 import net.minestom.server.instance.block.Block
 import net.minestom.server.coordinate.Pos
 import org.slf4j.Logger
@@ -34,10 +35,14 @@ object LobbyPlugin {
     
     // Core Managers
     lateinit var configManager: ConfigManager
-    lateinit var mongoManager: MongoManager
-    var redisManager: RedisManager? = null
     lateinit var eventManager: EventManager
     lateinit var commandManager: CommandManager
+    
+    // HTTP API
+    lateinit var gamemodeAPI: GamemodeAPI
+    
+    // Radium Command Forwarding
+    lateinit var radiumCommandForwarder: RadiumCommandForwarder
     
     // Feature Managers
     lateinit var queueManager: QueueManager
@@ -101,9 +106,8 @@ object LobbyPlugin {
             // Shutdown integrations
             radiumIntegration.shutdown()
             
-            // Close database connections
-            mongoManager.close()
-            redisManager?.close()
+            // Shutdown HTTP API
+            gamemodeAPI.shutdown()
             
             // Cancel coroutine scope
             coroutineScope.cancel()
@@ -121,21 +125,21 @@ object LobbyPlugin {
         configManager = ConfigManager(this)
         configManager.loadAllConfigs()
         
-        // Database connections
-        mongoManager = MongoManager(configManager)
-        
-        // Redis is optional now since we use HTTP API
-        val redisEnabled = configManager.getBoolean(configManager.mainConfig, "database.redis.enabled", false)
-        if (redisEnabled) {
-            redisManager = RedisManager(configManager)
-            logger.info("Redis integration enabled")
-        } else {
-            logger.info("Redis integration disabled - using HTTP API instead")
-        }
+        // HTTP API for gamemode synchronization
+        gamemodeAPI = GamemodeAPI(configManager)
+        gamemodeAPI.initialize()
         
         // Radium integration
         radiumIntegration = RadiumIntegration(configManager)
         radiumIntegration.initialize()
+        
+        // Radium command forwarding
+        val radiumApiUrl = configManager.getString(
+            configManager.mainConfig,
+            "radium.api.base_url",
+            "http://localhost:8080"
+        )
+        radiumCommandForwarder = RadiumCommandForwarder(radiumApiUrl)
         
         // Event and command management
         eventManager = EventManager(this)
@@ -178,6 +182,9 @@ object LobbyPlugin {
         
         val instanceManager = MinecraftServer.getInstanceManager()
         lobbyInstance = instanceManager.createInstanceContainer()
+        
+        // Enable automatic lighting updates
+        lobbyInstance.setChunkSupplier { instance, x, z -> LightingChunk(instance, x, z) }
         
         // Set the chunk generator
         lobbyInstance.setGenerator { unit ->

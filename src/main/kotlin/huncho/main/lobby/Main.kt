@@ -13,28 +13,14 @@ fun main() {
     LobbyPlugin.initialize()
     
     // Configure Velocity support  
-    // Debug: Let's see what the entire config contains
-    println("Debug: Full main config keys: ${LobbyPlugin.configManager.mainConfig.keys}")
-    
     val velocityEnabled = LobbyPlugin.configManager.getBoolean(LobbyPlugin.configManager.mainConfig, "server.velocity.enabled", true)
     if (velocityEnabled) {
-        // Debug: Let's check what the server config section contains
-        val serverConfig = LobbyPlugin.configManager.getMap(LobbyPlugin.configManager.mainConfig, "server")
-        println("Debug: Server config section: $serverConfig")
-        
-        val velocityConfig = LobbyPlugin.configManager.getMap(LobbyPlugin.configManager.mainConfig, "server.velocity")
-        println("Debug: Velocity config section: $velocityConfig")
-        
         val velocitySecret = LobbyPlugin.configManager.getString(LobbyPlugin.configManager.mainConfig, "server.velocity.secret", "")
-        println("Debug: Velocity secret found: '$velocitySecret' (length: ${velocitySecret.length})")
         if (velocitySecret.isNotEmpty() && velocitySecret != "your-velocity-secret-here" && velocitySecret.length >= 8) {
             VelocityProxy.enable(velocitySecret)
-            println("✅ Velocity proxy support enabled with secret: ${velocitySecret.take(4)}****")
+            println("✅ Velocity proxy support enabled")
         } else {
-            println("⚠️ Velocity secret not configured properly. Current secret: '$velocitySecret'")
-            println("   - Is not empty: ${velocitySecret.isNotEmpty()}")
-            println("   - Is not default: ${velocitySecret != "your-velocity-secret-here"}")
-            println("   - Length >= 8: ${velocitySecret.length >= 8}")
+            println("⚠️ Velocity secret not configured properly")
         }
     }
     

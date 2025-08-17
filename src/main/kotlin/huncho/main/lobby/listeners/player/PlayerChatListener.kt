@@ -32,7 +32,8 @@ class PlayerChatListener(private val plugin: LobbyPlugin) : EventListener<Player
                 // Check if chat is disabled for protection (only applies to non-bypass players)
                 if (plugin.configManager.getBoolean(plugin.configManager.mainConfig, "protection.anti_chat", false)) {
                     val hasBypass = plugin.radiumIntegration.hasPermission(player.uuid, "lobby.bypass.chat").join()
-                    if (!hasBypass && !hasAdmin) {
+                    val hasAdminBypass = plugin.radiumIntegration.hasPermission(player.uuid, "lobby.admin").join()
+                    if (!hasBypass && !hasAdminBypass) {
                         val message = plugin.configManager.getString(plugin.configManager.messagesConfig, "messages.protection.chat", "&cChat is currently disabled!")
                         MessageUtils.sendMessage(player, message)
                         return@runBlocking

@@ -32,6 +32,17 @@ class CommandManager(private val plugin: LobbyPlugin) {
         registerMinestomCommand(LeaveQueueCommand(plugin))
         registerMinestomCommand(PauseQueueCommand(plugin))
         
+        // Punishment commands (forwarded to Radium)
+        LobbyPlugin.logger.info("Registering punishment commands...")
+        registerMinestomCommand(BanCommand(plugin))
+        registerMinestomCommand(TempBanCommand(plugin))
+        registerMinestomCommand(UnbanCommand(plugin))
+        registerMinestomCommand(MuteCommand(plugin))
+        registerMinestomCommand(UnmuteCommand(plugin))
+        registerMinestomCommand(KickCommand(plugin))
+        registerMinestomCommand(CheckPunishmentsCommand(plugin))
+        LobbyPlugin.logger.info("Punishment commands registration completed")
+        
         // Schematic commands
         plugin.schematicManager.schematicService?.let { service ->
             registerMinestomCommand(SchematicCommand(service, plugin.radiumIntegration))
@@ -45,6 +56,11 @@ class CommandManager(private val plugin: LobbyPlugin) {
     }
     
     private fun registerMinestomCommand(command: Command) {
-        MinecraftServer.getCommandManager().register(command)
+        try {
+            MinecraftServer.getCommandManager().register(command)
+            LobbyPlugin.logger.info("Successfully registered command: ${command.name}")
+        } catch (e: Exception) {
+            LobbyPlugin.logger.error("Failed to register command: ${command.name}", e)
+        }
     }
 }

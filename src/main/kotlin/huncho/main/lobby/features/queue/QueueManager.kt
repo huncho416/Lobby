@@ -4,7 +4,6 @@ import huncho.main.lobby.LobbyPlugin
 import huncho.main.lobby.utils.MessageUtils
 import net.minestom.server.entity.Player
 import kotlinx.coroutines.*
-import org.bson.Document
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.UUID

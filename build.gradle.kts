@@ -26,14 +26,6 @@ dependencies {
     // Brigadier
     implementation("com.mojang:brigadier:1.0.18")
     
-    // MongoDB
-    implementation("org.mongodb:mongodb-driver-kotlin-coroutine:4.11.1")
-    implementation("org.mongodb:mongodb-driver-kotlin-sync:4.11.1")
-    
-    // Redis
-    implementation("redis.clients:jedis:5.0.2")
-    implementation("io.lettuce:lettuce-core:6.3.0.RELEASE")
-    
     // Configuration
     implementation("org.yaml:snakeyaml:2.2")
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.16.1")
@@ -58,6 +50,14 @@ dependencies {
     implementation("com.fasterxml.jackson.core:jackson-core:2.16.1")
     implementation("com.fasterxml.jackson.core:jackson-databind:2.16.1")
     
+    // HTTP API server for gamemode synchronization
+    implementation("io.javalin:javalin:5.6.3")
+    implementation("org.slf4j:slf4j-simple:2.0.7")
+    
+    // HTTP Client for Radium API communication
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.google.code.gson:gson:2.10.1")
+    
     // Schematics
     implementation("dev.hollowcube:schem:1.3.1")
     
@@ -77,6 +77,13 @@ tasks {
     
     build {
         dependsOn(shadowJar)
+    }
+    
+    // Configure run task to use shadowJar
+    run.configure {
+        dependsOn(shadowJar)
+        classpath = files(shadowJar.get().archiveFile)
+        mainClass.set("huncho.main.lobby.MainKt")
     }
 }
 
