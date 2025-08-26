@@ -31,6 +31,14 @@ class PlayerJoinListener(private val plugin: LobbyPlugin) : EventListener<Player
             // Sync with Radium
             plugin.radiumIntegration.syncPlayerOnJoin(player)
             
+            // Check if joining player is vanished
+            val isVanished = plugin.radiumIntegration.isPlayerVanished(player.uuid).join()
+            
+            if (isVanished) {
+                // Handle vanished player join - might need special visibility logic
+                plugin.logger.debug("Vanished player ${player.username} joined lobby")
+            }
+            
             // Teleport to spawn
             if (plugin.configManager.getBoolean(plugin.configManager.mainConfig, "lobby.teleport-on-join")) {
                 plugin.spawnManager.teleportToSpawn(player)
@@ -66,6 +74,9 @@ class PlayerJoinListener(private val plugin: LobbyPlugin) : EventListener<Player
             
             // Set tab list with MythicHub style (respects Radium)
             plugin.tabListManager.onPlayerJoin(player)
+            
+            // Update visibility for all players considering the new player's vanish status
+            plugin.visibilityManager.updateVisibilityForNewPlayer(player)
             
             // Check for updates (staff only)
             plugin.radiumIntegration.hasPermission(player.uuid, "hub.update").thenAccept { hasUpdate ->

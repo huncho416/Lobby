@@ -7,6 +7,11 @@ radium:
   fallback:
     default_rank: "Default"
     default_prefix: "&7"
+  # Vanish Integration
+  vanish:
+    respect_status: true  # NEW: Respect vanish status from proxy
+    hide_from_tab: true   # NEW: Hide vanished players from tab if viewer can't see them
+    cache_duration: 30    # NEW: Cache vanish status for X seconds
 
 # HTTP API for gamemode synchronization with Radium proxy
 http_api:
@@ -90,6 +95,10 @@ scoreboard:
 # Tab list formatting - matches MythicHub exactly
 tablist:
   enabled: true
+  respect_radium_formatting: true
+  respect_vanish_status: true  # NEW: Respect vanish status from Radium
+  show_vanish_indicator: true  # NEW: Show (Vanished) indicator to staff
+  update_interval: 100  # ticks
   header:
     - ""
     - "     &d&lMYTHIC&f&lPVP"            # Centered bold title with proper spacing

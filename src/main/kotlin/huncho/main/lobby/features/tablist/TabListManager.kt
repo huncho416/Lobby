@@ -95,13 +95,33 @@ class TabListManager(private val plugin: LobbyPlugin) {
     }
     
     /**
-     * Update player display names in tab list - only if Radium doesn't provide formatting
+     * Update player display names in tab list - respecting vanish status
      */
     private suspend fun updatePlayerDisplayNames(viewer: Player) {
         val respectRadium = plugin.configManager.getBoolean(plugin.configManager.mainConfig, "tablist.respect_radium_formatting", true)
+        val respectVanish = plugin.configManager.getBoolean(plugin.configManager.mainConfig, "tablist.respect_vanish_status", true)
+        val showVanishIndicator = plugin.configManager.getBoolean(plugin.configManager.mainConfig, "tablist.show_vanish_indicator", true)
         
         MinecraftServer.getConnectionManager().onlinePlayers.forEach { targetPlayer ->
             try {
+                // Check if target player is vanished
+                val isVanished = if (respectVanish) {
+                    plugin.radiumIntegration.isPlayerVanished(targetPlayer.uuid).join()
+                } else {
+                    false
+                }
+                
+                if (isVanished && respectVanish) {
+                    // Check if viewer can see vanished player
+                    val canSee = plugin.radiumIntegration.canSeeVanishedPlayer(viewer.uuid, targetPlayer.uuid).join()
+                    if (!canSee) {
+                        // Hide this player from viewer's tab list
+                        // Note: In Minestom, we might need to use different methods to hide players
+                        // For now, we'll skip updating their display name
+                        return@forEach
+                    }
+                }
+                
                 var shouldUseRadium = false
                 var radiumDisplayName = ""
                 
@@ -114,12 +134,13 @@ class TabListManager(private val plugin: LobbyPlugin) {
                         val prefix = radiumData.rank.prefix.ifEmpty { "" }
                         val color = radiumData.rank.color.ifEmpty { "&7" }
                         
-                        // Build display name: prefix + color + name (no suffix in Radium data model)
-                        radiumDisplayName = "$prefix$color${targetPlayer.username}"
+                        // Add vanish indicator if viewer can see vanished players
+                        val vanishIndicator = if (isVanished && showVanishIndicator) " &8(Vanished)" else ""
+                        radiumDisplayName = "$prefix$color${targetPlayer.username}$vanishIndicator"
                         shouldUseRadium = true
                     }
                 }
-                
+
                 if (shouldUseRadium) {
                     // Use Radium formatting - in Minestom, we set the player's display name
                     // Note: This may not work exactly like Bukkit's sendPlayerListName
@@ -127,10 +148,11 @@ class TabListManager(private val plugin: LobbyPlugin) {
                 } else {
                     // Use fallback formatting only if Radium doesn't provide it
                     val fallbackFormat = plugin.configManager.getString(plugin.configManager.mainConfig, "tablist.fallback_format", "&7%player_name%")
-                    val displayName = fallbackFormat.replace("%player_name%", targetPlayer.username)
+                    val vanishIndicator = if (isVanished && showVanishIndicator) " &8(Vanished)" else ""
+                    val displayName = fallbackFormat.replace("%player_name%", targetPlayer.username) + vanishIndicator
                 }
             } catch (e: Exception) {
-                plugin.logger.warn("Error setting tab list name for ${targetPlayer.username} - keeping default", e)
+                plugin.logger.warn("Error updating tab list name for ${targetPlayer.username}", e)
                 // On error, don't change the display name to avoid overriding Radium
             }
         }

@@ -100,37 +100,86 @@ class VisibilityManager(private val plugin: LobbyPlugin) {
     }
     
     /**
-     * Update visibility for all players when a new player joins
+     * Check if target is staff using Radium API
      */
-    fun updateVisibilityForNewPlayer(newPlayer: Player) {
-        plugin.lobbyInstance.players.forEach { viewer ->
-            if (viewer == newPlayer) return@forEach
-            
-            val mode = getVisibility(viewer)
-            val shouldShow = when (mode) {
-                VisibilityMode.ALL -> true
-                VisibilityMode.STAFF -> isStaff(newPlayer)
-                VisibilityMode.NONE -> false
-            }
-            
-            if (shouldShow) {
-                showPlayer(viewer, newPlayer)
-            } else {
-                hidePlayer(viewer, newPlayer)
-            }
+    private fun isStaff(player: Player): Boolean {
+        return try {
+            plugin.radiumIntegration.hasPermission(player.uuid, "radium.staff").get()
+        } catch (e: Exception) {
+            false
         }
-        
-        // Update visibility for the new player
-        runBlocking { loadVisibility(newPlayer) }
     }
     
     /**
-     * Check if target is staff
+     * Update visibility for a new player considering vanish status
      */
-    private fun isStaff(player: Player): Boolean {
-        // TODO: Implement async permission checking
-        // For now, return false to allow compilation
-        return false
+    fun updateVisibilityForNewPlayer(newPlayer: Player) {
+        runBlocking {
+            // Check if the new player is vanished
+            val isVanished = plugin.radiumIntegration.isPlayerVanished(newPlayer.uuid).join()
+            
+            // Update visibility for all existing players
+            plugin.lobbyInstance.players.forEach { existingPlayer ->
+                if (existingPlayer != newPlayer) {
+                    // Check if existing player can see the new player
+                    val existingMode = getVisibility(existingPlayer)
+                    val shouldShow = when (existingMode) {
+                        VisibilityMode.ALL -> {
+                            if (isVanished) {
+                                // Check if existing player can see vanished players
+                                plugin.radiumIntegration.canSeeVanishedPlayer(existingPlayer.uuid, newPlayer.uuid).join()
+                            } else {
+                                true
+                            }
+                        }
+                        VisibilityMode.STAFF -> {
+                            val newPlayerIsStaff = isStaff(newPlayer)
+                            if (isVanished) {
+                                newPlayerIsStaff && plugin.radiumIntegration.canSeeVanishedPlayer(existingPlayer.uuid, newPlayer.uuid).join()
+                            } else {
+                                newPlayerIsStaff
+                            }
+                        }
+                        VisibilityMode.NONE -> false
+                    }
+                    
+                    // Apply visibility using Minestom's visibility API
+                    if (shouldShow) {
+                        showPlayer(existingPlayer, newPlayer)
+                    } else {
+                        hidePlayer(existingPlayer, newPlayer)
+                    }
+                    
+                    // Also check if new player can see existing player
+                    val newPlayerMode = getVisibility(newPlayer)
+                    val existingIsVanished = plugin.radiumIntegration.isPlayerVanished(existingPlayer.uuid).join()
+                    val newPlayerCanSeeExisting = when (newPlayerMode) {
+                        VisibilityMode.ALL -> {
+                            if (existingIsVanished) {
+                                plugin.radiumIntegration.canSeeVanishedPlayer(newPlayer.uuid, existingPlayer.uuid).join()
+                            } else {
+                                true
+                            }
+                        }
+                        VisibilityMode.STAFF -> {
+                            val existingIsStaff = isStaff(existingPlayer)
+                            if (existingIsVanished) {
+                                existingIsStaff && plugin.radiumIntegration.canSeeVanishedPlayer(newPlayer.uuid, existingPlayer.uuid).join()
+                            } else {
+                                existingIsStaff
+                            }
+                        }
+                        VisibilityMode.NONE -> false
+                    }
+                    
+                    if (newPlayerCanSeeExisting) {
+                        showPlayer(newPlayer, existingPlayer)
+                    } else {
+                        hidePlayer(newPlayer, existingPlayer)
+                    }
+                }
+            }
+        }
     }
     
     /**
@@ -145,16 +194,18 @@ class VisibilityManager(private val plugin: LobbyPlugin) {
      * Show target player to viewer
      */
     private fun showPlayer(viewer: Player, target: Player) {
+        // TODO: Implement Minestom player visibility showing
         // In Minestom, players are visible by default
-        // This method would be used if you're tracking hidden players
+        // You might need to use viewer.updateViewableRule(target) or similar
     }
     
     /**
      * Hide target player from viewer
      */
     private fun hidePlayer(viewer: Player, target: Player) {
-        // In Minestom, you would remove the player from the viewer's sight
-        // This is a simplified implementation
+        // TODO: Implement Minestom player visibility hiding
+        // You might need to use viewer.updateViewableRule(target) or similar
+        // Or remove the player from viewer's sight using the proper Minestom API
     }
     
     /**

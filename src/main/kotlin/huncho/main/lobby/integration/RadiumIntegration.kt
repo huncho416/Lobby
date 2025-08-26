@@ -455,6 +455,50 @@ class RadiumIntegration(
         return player.username
     }
     
+    /**
+     * Check if a player is currently vanished
+     */
+    fun isPlayerVanished(playerUuid: UUID): CompletableFuture<Boolean> {
+        return CompletableFuture.supplyAsync {
+            try {
+                val request = buildGetRequest("/v1/player/${playerUuid}/vanish")
+                httpClient.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        val jsonNode = objectMapper.readTree(response.body?.string())
+                        jsonNode.get("vanished")?.asBoolean() ?: false
+                    } else {
+                        false
+                    }
+                }
+            } catch (e: Exception) {
+                logger.warn("Failed to check vanish status for $playerUuid", e)
+                false
+            }
+        }
+    }
+
+    /**
+     * Check if a viewer can see a vanished player
+     */
+    fun canSeeVanishedPlayer(viewerUuid: UUID, vanishedPlayerUuid: UUID): CompletableFuture<Boolean> {
+        return CompletableFuture.supplyAsync {
+            try {
+                val request = buildGetRequest("/v1/player/${viewerUuid}/can-see-vanished/${vanishedPlayerUuid}")
+                httpClient.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        val jsonNode = objectMapper.readTree(response.body?.string())
+                        jsonNode.get("canSee")?.asBoolean() ?: false
+                    } else {
+                        false
+                    }
+                }
+            } catch (e: Exception) {
+                logger.warn("Failed to check vanish visibility for $viewerUuid -> $vanishedPlayerUuid", e)
+                false
+            }
+        }
+    }
+    
     private fun buildGetRequest(endpoint: String): Request {
         val requestBuilder = Request.Builder()
             .url("$baseUrl$endpoint")
