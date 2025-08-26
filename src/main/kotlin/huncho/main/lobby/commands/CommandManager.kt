@@ -47,6 +47,9 @@ class CommandManager(private val plugin: LobbyPlugin) {
             registerMinestomCommand(SchematicCommand(service, plugin.radiumIntegration))
         }
         
+        // Vanish testing command (admin only)
+        registerMinestomCommand(VanishTestCommand(plugin))
+        
         // Feature commands (will be created)
         // registerMinestomCommand(PlayerVisibilityCommand(plugin))
         // registerMinestomCommand(ScoreboardCommand(plugin))

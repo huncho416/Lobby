@@ -256,4 +256,22 @@ class ScoreboardManager(private val plugin: LobbyPlugin) {
             "active_scoreboards" to playerScoreboards.size
         )
     }
+    
+    /**
+     * Update scoreboard for a specific player (public method for vanish events)
+     */
+    fun updateScoreboard(player: Player) {
+        val uuid = player.uuid.toString()
+        val sidebar = playerScoreboards[uuid]
+        
+        if (sidebar != null && enabledPlayers[uuid] == true) {
+            updateJob.launch {
+                try {
+                    updateScoreboardContent(player, sidebar)
+                } catch (e: Exception) {
+                    LobbyPlugin.logger.error("Error updating scoreboard for ${player.username}", e)
+                }
+            }
+        }
+    }
 }

@@ -65,18 +65,9 @@ class VanishStatusMonitor(private val plugin: LobbyPlugin) {
                     if (lastKnownStatus == null || lastKnownStatus != currentVanishStatus) {
                         lastKnownVanishStatus[player.uuid] = currentVanishStatus
                         
-                        // Handle the status change
-                        plugin.visibilityManager.handleVanishStatusChange(player.uuid, currentVanishStatus)
-                        
-                        // Update tab list to reflect vanish status
-                        plugin.tabListManager.updatePlayerTabList(player)
-                        
-                        // Update tab list for all other players to show/hide vanish indicator
-                        MinecraftServer.getConnectionManager().onlinePlayers.forEach { otherPlayer ->
-                            if (otherPlayer != player) {
-                                plugin.tabListManager.updatePlayerTabList(otherPlayer)
-                            }
-                        }
+                        // Use the vanish event listener to handle the change
+                        val eventMessage = "uuid=${player.uuid},vanished=$currentVanishStatus,action=${if (currentVanishStatus) "vanish" else "unvanish"}"
+                        plugin.vanishEventListener.handleVanishEvent(eventMessage)
                         
                         plugin.logger.debug("Vanish status change detected for ${player.username}: ${if (currentVanishStatus) "vanished" else "visible"}")
                     }
@@ -104,8 +95,8 @@ class VanishStatusMonitor(private val plugin: LobbyPlugin) {
                 val currentVanishStatus = plugin.radiumIntegration.isPlayerVanished(playerUuid).join()
                 lastKnownVanishStatus[playerUuid] = currentVanishStatus
                 
-                plugin.visibilityManager.handleVanishStatusChange(playerUuid, currentVanishStatus)
-                plugin.tabListManager.updatePlayerTabList(player)
+                // Use the vanish event listener to handle the change
+                plugin.vanishEventListener.processVanishStatusChange(playerUuid)
                 
                 plugin.logger.debug("Force checked vanish status for ${player.username}: ${if (currentVanishStatus) "vanished" else "visible"}")
             }

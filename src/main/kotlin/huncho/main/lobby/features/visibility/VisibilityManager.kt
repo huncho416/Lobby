@@ -4,9 +4,12 @@ import huncho.main.lobby.LobbyPlugin
 import huncho.main.lobby.utils.MessageUtils
 import net.minestom.server.entity.Player
 import net.minestom.server.MinecraftServer
+import net.minestom.server.event.GlobalEventHandler
+import net.minestom.server.event.player.PlayerSpawnEvent
 import kotlinx.coroutines.runBlocking
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CompletableFuture
 
 enum class VisibilityMode {
     ALL,     // Show all players
@@ -17,6 +20,22 @@ enum class VisibilityMode {
 class VisibilityManager(private val plugin: LobbyPlugin) {
     
     private val playerVisibility = ConcurrentHashMap<String, VisibilityMode>()
+    
+    /**
+     * Register event handlers for vanish visibility
+     */
+    fun registerEvents(eventHandler: GlobalEventHandler) {
+        eventHandler.addListener(PlayerSpawnEvent::class.java) { event ->
+            // Update visibility for the spawning player
+            CompletableFuture.runAsync {
+                runBlocking {
+                    updatePlayerVisibilityForVanish(event.player)
+                    // Also update other players' visibility to this player
+                    updateVisibilityForAll()
+                }
+            }
+        }
+    }
     
     /**
      * Set visibility mode for a player
@@ -185,49 +204,79 @@ class VisibilityManager(private val plugin: LobbyPlugin) {
     }
     
     /**
-     * Update player visibility based on vanish status and viewer preferences
+     * Update player visibility based on vanish status - CRITICAL for in-game vanish
      */
     suspend fun updatePlayerVisibilityForVanish(player: Player) {
         try {
-            // Check if the player is vanished
             val isVanished = plugin.radiumIntegration.isPlayerVanished(player.uuid).join()
             
-            // Update visibility for all other players
-            plugin.lobbyInstance.players.forEach { viewer ->
-                if (viewer != player) {
-                    val viewerMode = getVisibility(viewer)
-                    val shouldShow = when (viewerMode) {
-                        VisibilityMode.ALL -> {
-                            if (isVanished) {
-                                // Check if viewer can see vanished players
-                                plugin.radiumIntegration.canSeeVanishedPlayer(viewer.uuid, player.uuid).join()
-                            } else {
-                                true
-                            }
+            // Get all players in the same instance
+            val allPlayers = player.instance?.players ?: emptySet()
+            
+            for (otherPlayer in allPlayers) {
+                if (otherPlayer.uuid != player.uuid) {
+                    if (isVanished) {
+                        val canSee = plugin.radiumIntegration.canSeeVanishedPlayer(otherPlayer.uuid, player.uuid).join()
+                        if (!canSee) {
+                            // Hide vanished player from viewers who can't see them
+                            hidePlayerFromViewer(otherPlayer, player)
+                        } else {
+                            // Show vanished player to viewers who can see them (staff)
+                            showPlayerToViewer(otherPlayer, player)
                         }
-                        VisibilityMode.STAFF -> {
-                            val playerIsStaff = isStaff(player)
-                            if (isVanished) {
-                                playerIsStaff && plugin.radiumIntegration.canSeeVanishedPlayer(viewer.uuid, player.uuid).join()
-                            } else {
-                                playerIsStaff
-                            }
-                        }
-                        VisibilityMode.NONE -> false
-                    }
-                    
-                    // Apply visibility using Minestom's API
-                    if (shouldShow) {
-                        showPlayer(viewer, player)
                     } else {
-                        hidePlayer(viewer, player)
+                        // Player is not vanished - show to everyone
+                        showPlayerToViewer(otherPlayer, player)
                     }
                 }
             }
             
-            plugin.logger.debug("Updated visibility for ${if (isVanished) "vanished" else "visible"} player ${player.username}")
+            plugin.logger.debug("Updated vanish visibility for ${player.username} (vanished: $isVanished)")
         } catch (e: Exception) {
             plugin.logger.error("Error updating vanish visibility for ${player.username}", e)
+        }
+    }
+    
+    /**
+     * Update visibility for all online players - called when vanish status changes
+     */
+    private suspend fun updateVisibilityForAll() {
+        try {
+            val allPlayers = MinecraftServer.getConnectionManager().onlinePlayers
+            
+            for (player in allPlayers) {
+                updatePlayerVisibilityForVanish(player)
+            }
+            
+            plugin.logger.debug("Updated visibility for all ${allPlayers.size} online players")
+        } catch (e: Exception) {
+            plugin.logger.error("Error updating visibility for all players", e)
+        }
+    }
+    
+    /**
+     * Hide a player from a specific viewer using Minestom's entity visibility
+     */
+    private fun hidePlayerFromViewer(viewer: Player, target: Player) {
+        try {
+            // Use Minestom's entity visibility system - remove viewer from target's viewers
+            target.removeViewer(viewer)
+            plugin.logger.debug("Hidden ${target.username} from ${viewer.username}")
+        } catch (e: Exception) {
+            plugin.logger.warn("Failed to hide ${target.username} from ${viewer.username}", e)
+        }
+    }
+    
+    /**
+     * Show a player to a specific viewer using Minestom's entity visibility
+     */
+    private fun showPlayerToViewer(viewer: Player, target: Player) {
+        try {
+            // Use Minestom's entity visibility system - add viewer to target's viewers
+            target.addViewer(viewer)
+            plugin.logger.debug("Shown ${target.username} to ${viewer.username}")
+        } catch (e: Exception) {
+            plugin.logger.warn("Failed to show ${target.username} to ${viewer.username}", e)
         }
     }
     

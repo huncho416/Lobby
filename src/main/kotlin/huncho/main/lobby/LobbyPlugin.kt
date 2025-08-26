@@ -13,6 +13,7 @@ import huncho.main.lobby.features.protection.ProtectionManager
 import huncho.main.lobby.features.world.WorldLightingManager
 import huncho.main.lobby.features.tablist.TabListManager
 import huncho.main.lobby.features.vanish.VanishStatusMonitor
+import huncho.main.lobby.features.vanish.VanishEventListener
 import huncho.main.lobby.managers.SchematicManager
 import huncho.main.lobby.integration.RadiumIntegration
 import kotlinx.coroutines.*
@@ -54,6 +55,7 @@ object LobbyPlugin {
     lateinit var worldLightingManager: WorldLightingManager
     lateinit var tabListManager: TabListManager
     lateinit var vanishStatusMonitor: VanishStatusMonitor
+    lateinit var vanishEventListener: VanishEventListener
     lateinit var schematicManager: SchematicManager
     
     // Integration
@@ -173,11 +175,16 @@ object LobbyPlugin {
         worldLightingManager = WorldLightingManager(this)
         tabListManager = TabListManager(this)
         vanishStatusMonitor = VanishStatusMonitor(this)
+        vanishEventListener = VanishEventListener(this)
         
         // Initialize the new managers
         worldLightingManager.initialize()
         tabListManager.initialize()
         vanishStatusMonitor.initialize()
+        
+        // Register vanish event handlers in visibility manager
+        val eventHandler = MinecraftServer.getGlobalEventHandler()
+        visibilityManager.registerEvents(eventHandler)
         
         // Register all event listeners
         eventManager.registerAllListeners()
