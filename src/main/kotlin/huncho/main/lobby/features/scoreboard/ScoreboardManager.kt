@@ -62,7 +62,10 @@ class ScoreboardManager(private val plugin: LobbyPlugin) {
         enabledPlayers.remove(uuid)
         
         scoreboard?.let { sidebar ->
-            sidebar.viewers.clear()
+            // Remove all viewers individually since viewers collection is unmodifiable
+            sidebar.viewers.toList().forEach { viewer ->
+                sidebar.removeViewer(viewer)
+            }
         }
     }
     
@@ -201,7 +204,10 @@ class ScoreboardManager(private val plugin: LobbyPlugin) {
         playerScoreboards.entries.removeAll { (uuid, sidebar) ->
             val player = plugin.lobbyInstance.players.find { it.uuid.toString() == uuid }
             if (player == null) {
-                sidebar.viewers.clear()
+                // Remove all viewers individually since viewers collection is unmodifiable
+                sidebar.viewers.toList().forEach { viewer ->
+                    sidebar.removeViewer(viewer)
+                }
                 true // Remove from map
             } else {
                 if (isScoreboardEnabled(player)) {
