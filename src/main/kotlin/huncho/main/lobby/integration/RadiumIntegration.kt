@@ -461,7 +461,7 @@ class RadiumIntegration(
     fun isPlayerVanished(playerUuid: UUID): CompletableFuture<Boolean> {
         return CompletableFuture.supplyAsync {
             try {
-                val request = buildGetRequest("/v1/player/${playerUuid}/vanish")
+                val request = buildGetRequest("/api/players/uuid/${playerUuid}/vanish")
                 httpClient.newCall(request).execute().use { response ->
                     if (response.isSuccessful) {
                         val jsonNode = objectMapper.readTree(response.body?.string())
@@ -483,7 +483,7 @@ class RadiumIntegration(
     fun canSeeVanishedPlayer(viewerUuid: UUID, vanishedPlayerUuid: UUID): CompletableFuture<Boolean> {
         return CompletableFuture.supplyAsync {
             try {
-                val request = buildGetRequest("/v1/player/${viewerUuid}/can-see-vanished/${vanishedPlayerUuid}")
+                val request = buildGetRequest("/api/players/uuid/${viewerUuid}/can-see-vanished/${vanishedPlayerUuid}")
                 httpClient.newCall(request).execute().use { response ->
                     if (response.isSuccessful) {
                         val jsonNode = objectMapper.readTree(response.body?.string())
