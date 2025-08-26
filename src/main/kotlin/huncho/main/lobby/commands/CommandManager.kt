@@ -21,7 +21,6 @@ class CommandManager(private val plugin: LobbyPlugin) {
     
     private fun registerCommands() {
         // Core commands
-        registerMinestomCommand(HubCoreCommand(plugin))
         registerMinestomCommand(SpawnCommand(plugin))
         registerMinestomCommand(SetSpawnCommand(plugin))
         registerMinestomCommand(FlyCommand(plugin))
@@ -49,7 +48,6 @@ class CommandManager(private val plugin: LobbyPlugin) {
         }
         
         // Feature commands (will be created)
-        // registerMinestomCommand(GadgetMenuCommand(plugin))
         // registerMinestomCommand(PlayerVisibilityCommand(plugin))
         // registerMinestomCommand(ScoreboardCommand(plugin))
         // registerMinestomCommand(SoundCommand(plugin))

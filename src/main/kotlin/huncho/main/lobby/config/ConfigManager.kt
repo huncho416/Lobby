@@ -238,18 +238,6 @@ items:
   player-visibility: "&ePlayer Visibility"
   leave-server: "&cLeave Server"
 
-# Gadgets
-gadgets:
-  flying-pearl:
-    name: "&bFlying Pearl"
-    description:
-      - "&7Right-click to throw a flying pearl!"
-      - "&7Left-click to change mode:"
-      - "&8• &aNormal: &7Teleport on impact"
-      - "&8• &eFollow: &7Follow the pearl"
-    mode-normal: "&aMode: Normal"
-    mode-follow: "&eMode: Follow"
-
 # Queue System
 queue:
   priority:
