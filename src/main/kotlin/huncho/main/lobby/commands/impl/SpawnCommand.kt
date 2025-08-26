@@ -16,16 +16,8 @@ class SpawnCommand(private val plugin: LobbyPlugin) : Command("spawn") {
                 return@setDefaultExecutor
             }
             
-            // Check permissions before execution
-            plugin.radiumIntegration.hasPermission(sender.uuid, "lobby.admin").thenAccept { hasAdmin ->
-                plugin.radiumIntegration.hasPermission(sender.uuid, "lobby.spawn").thenAccept { hasSpawn ->
-                    if (hasAdmin || hasSpawn) {
-                        plugin.spawnManager.teleportToSpawnWithMessage(sender)
-                    } else {
-                        MessageUtils.sendMessage(sender, "&cYou don't have permission to use this command!")
-                    }
-                }
-            }
+            // All players can use /spawn
+            plugin.spawnManager.teleportToSpawnWithMessage(sender)
         }
     }
 }

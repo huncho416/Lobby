@@ -11,7 +11,19 @@ import net.minestom.server.entity.Player
 class TempBanCommand(private val plugin: LobbyPlugin) : Command("tempban") {
     
     init {
-        // Remove complex condition check for now - handle permissions in execution
+        // Only show command to players with permission
+        setCondition { sender, _ ->
+            when (sender) {
+                is Player -> try {
+                    plugin.radiumIntegration.hasPermission(sender.uuid, "radium.command.tempban").get() ||
+                    plugin.radiumIntegration.hasPermission(sender.uuid, "lobby.admin").get()
+                } catch (e: Exception) {
+                    false
+                }
+                else -> true // Allow console
+            }
+        }
+        
         val targetArg = ArgumentType.Word("target")
         val durationArg = ArgumentType.Word("duration")
         val reasonArg = ArgumentType.StringArray("reason")

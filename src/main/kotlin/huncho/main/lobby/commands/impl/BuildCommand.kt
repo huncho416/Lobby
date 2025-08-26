@@ -8,7 +8,19 @@ import net.minestom.server.entity.Player
 class BuildCommand(private val plugin: LobbyPlugin) : Command("build", "buildmode") {
     
     init {
-        // Remove condition check - handle permissions in execution  
+        // Only show command to players with permission
+        setCondition { sender, _ ->
+            when (sender) {
+                is Player -> try {
+                    plugin.radiumIntegration.hasPermission(sender.uuid, "radium.command.build").get() ||
+                    plugin.radiumIntegration.hasPermission(sender.uuid, "lobby.admin").get()
+                } catch (e: Exception) {
+                    false
+                }
+                else -> true // Allow console
+            }
+        }
+        
         setDefaultExecutor { sender, _ ->
             if (sender !is Player) {
                 sender.sendMessage("This command can only be used by players!")

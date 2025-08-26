@@ -11,7 +11,18 @@ import net.minestom.server.entity.Player
 class CheckPunishmentsCommand(private val plugin: LobbyPlugin) : Command("checkpunishments", "punishments", "history") {
     
     init {
-        // Remove complex condition check for now - handle permissions in execution
+        setCondition { sender, _ ->
+            when (sender) {
+                is Player -> try {
+                    plugin.radiumIntegration.hasPermission(sender.uuid, "radium.command.checkpunishments").get() ||
+                    plugin.radiumIntegration.hasPermission(sender.uuid, "lobby.admin").get()
+                } catch (e: Exception) {
+                    false
+                }
+                else -> true // Allow console
+            }
+        }
+        
         val targetArg = ArgumentType.Word("target")
         
         // /checkpunishments <target>
