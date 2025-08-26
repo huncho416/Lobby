@@ -12,6 +12,7 @@ import huncho.main.lobby.features.spawn.SpawnManager
 import huncho.main.lobby.features.protection.ProtectionManager
 import huncho.main.lobby.features.world.WorldLightingManager
 import huncho.main.lobby.features.tablist.TabListManager
+import huncho.main.lobby.features.vanish.VanishStatusMonitor
 import huncho.main.lobby.managers.SchematicManager
 import huncho.main.lobby.integration.RadiumIntegration
 import kotlinx.coroutines.*
@@ -52,6 +53,7 @@ object LobbyPlugin {
     lateinit var protectionManager: ProtectionManager
     lateinit var worldLightingManager: WorldLightingManager
     lateinit var tabListManager: TabListManager
+    lateinit var vanishStatusMonitor: VanishStatusMonitor
     lateinit var schematicManager: SchematicManager
     
     // Integration
@@ -102,6 +104,11 @@ object LobbyPlugin {
             
             // Shutdown schematic manager
             schematicManager.shutdown()
+            
+            // Shutdown vanish status monitor
+            if (::vanishStatusMonitor.isInitialized) {
+                vanishStatusMonitor.shutdown()
+            }
             
             // Shutdown integrations
             radiumIntegration.shutdown()
@@ -165,10 +172,12 @@ object LobbyPlugin {
         // MythicHub style features
         worldLightingManager = WorldLightingManager(this)
         tabListManager = TabListManager(this)
+        vanishStatusMonitor = VanishStatusMonitor(this)
         
         // Initialize the new managers
         worldLightingManager.initialize()
         tabListManager.initialize()
+        vanishStatusMonitor.initialize()
         
         // Register all event listeners
         eventManager.registerAllListeners()
@@ -207,6 +216,11 @@ object LobbyPlugin {
             // Shutdown event manager and join item monitor
             if (::eventManager.isInitialized) {
                 eventManager.shutdown()
+            }
+            
+            // Shutdown vanish status monitor
+            if (::vanishStatusMonitor.isInitialized) {
+                vanishStatusMonitor.shutdown()
             }
             
             // Cancel all coroutines

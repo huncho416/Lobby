@@ -78,6 +78,9 @@ class PlayerJoinListener(private val plugin: LobbyPlugin) : EventListener<Player
             // Update visibility for all players considering the new player's vanish status
             plugin.visibilityManager.updateVisibilityForNewPlayer(player)
             
+            // Also update vanish-specific visibility
+            plugin.visibilityManager.updatePlayerVisibilityForVanish(player)
+            
             // Check for updates (staff only)
             plugin.radiumIntegration.hasPermission(player.uuid, "hub.update").thenAccept { hasUpdate ->
                 if (hasUpdate) {

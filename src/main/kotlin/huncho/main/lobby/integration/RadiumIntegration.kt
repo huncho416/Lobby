@@ -449,10 +449,25 @@ class RadiumIntegration(
         }
     }
     
-    // Tab list method
+    /**
+     * Get formatted tab list name for a player
+     */
     fun getTabListName(player: Player): String {
-        // TODO: Implement tab list name formatting
-        return player.username
+        return try {
+            val playerData = getPlayerData(player.uuid).join()
+            if (playerData != null && playerData.rank != null) {
+                val prefix = playerData.rank.prefix.ifEmpty { "" }
+                val color = playerData.rank.color.ifEmpty { "&7" }
+                "$prefix$color${player.username}"
+            } else {
+                // Fallback formatting
+                val fallbackPrefix = configManager.getString(configManager.mainConfig, "radium.fallback.default_prefix", "&7")
+                "$fallbackPrefix${player.username}"
+            }
+        } catch (e: Exception) {
+            logger.warn("Failed to get tab list name for ${player.username}, using fallback", e)
+            player.username
+        }
     }
     
     /**

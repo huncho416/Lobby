@@ -3,7 +3,9 @@ package huncho.main.lobby.features.visibility
 import huncho.main.lobby.LobbyPlugin
 import huncho.main.lobby.utils.MessageUtils
 import net.minestom.server.entity.Player
+import net.minestom.server.MinecraftServer
 import kotlinx.coroutines.runBlocking
+import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
 enum class VisibilityMode {
@@ -183,29 +185,89 @@ class VisibilityManager(private val plugin: LobbyPlugin) {
     }
     
     /**
+     * Update player visibility based on vanish status and viewer preferences
+     */
+    suspend fun updatePlayerVisibilityForVanish(player: Player) {
+        try {
+            // Check if the player is vanished
+            val isVanished = plugin.radiumIntegration.isPlayerVanished(player.uuid).join()
+            
+            // Update visibility for all other players
+            plugin.lobbyInstance.players.forEach { viewer ->
+                if (viewer != player) {
+                    val viewerMode = getVisibility(viewer)
+                    val shouldShow = when (viewerMode) {
+                        VisibilityMode.ALL -> {
+                            if (isVanished) {
+                                // Check if viewer can see vanished players
+                                plugin.radiumIntegration.canSeeVanishedPlayer(viewer.uuid, player.uuid).join()
+                            } else {
+                                true
+                            }
+                        }
+                        VisibilityMode.STAFF -> {
+                            val playerIsStaff = isStaff(player)
+                            if (isVanished) {
+                                playerIsStaff && plugin.radiumIntegration.canSeeVanishedPlayer(viewer.uuid, player.uuid).join()
+                            } else {
+                                playerIsStaff
+                            }
+                        }
+                        VisibilityMode.NONE -> false
+                    }
+                    
+                    // Apply visibility using Minestom's API
+                    if (shouldShow) {
+                        showPlayer(viewer, player)
+                    } else {
+                        hidePlayer(viewer, player)
+                    }
+                }
+            }
+            
+            plugin.logger.debug("Updated visibility for ${if (isVanished) "vanished" else "visible"} player ${player.username}")
+        } catch (e: Exception) {
+            plugin.logger.error("Error updating vanish visibility for ${player.username}", e)
+        }
+    }
+    
+    /**
+     * Update visibility for all players when a player's vanish status changes
+     */
+    suspend fun handleVanishStatusChange(playerUuid: UUID, isVanished: Boolean) {
+        try {
+            val player = MinecraftServer.getConnectionManager().onlinePlayers.find { it.uuid == playerUuid }
+            if (player != null) {
+                updatePlayerVisibilityForVanish(player)
+                plugin.logger.info("Handled vanish status change for ${player.username}: ${if (isVanished) "vanished" else "visible"}")
+            }
+        } catch (e: Exception) {
+            plugin.logger.error("Error handling vanish status change for $playerUuid", e)
+        }
+    }
+
+    /**
      * Check if viewer can see target
      */
     private fun canSeePlayer(viewer: Player, target: Player): Boolean {
-        // This is a simple implementation - in a real scenario you'd track visibility state
-        return true // Minestom handles this internally
+        // Check if the target player is in the viewer's viewable entities
+        return viewer.viewers.contains(target)
     }
     
     /**
      * Show target player to viewer
      */
     private fun showPlayer(viewer: Player, target: Player) {
-        // TODO: Implement Minestom player visibility showing
-        // In Minestom, players are visible by default
-        // You might need to use viewer.updateViewableRule(target) or similar
+        // Add the target player to viewer's visible entities
+        target.addViewer(viewer)
     }
     
     /**
      * Hide target player from viewer
      */
     private fun hidePlayer(viewer: Player, target: Player) {
-        // TODO: Implement Minestom player visibility hiding
-        // You might need to use viewer.updateViewableRule(target) or similar
-        // Or remove the player from viewer's sight using the proper Minestom API
+        // Remove the target player from viewer's visible entities
+        target.removeViewer(viewer)
     }
     
     /**

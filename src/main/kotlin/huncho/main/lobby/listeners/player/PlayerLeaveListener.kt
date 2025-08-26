@@ -40,6 +40,9 @@ class PlayerLeaveListener(private val plugin: LobbyPlugin) : EventListener<Playe
             // Clean up player data
             plugin.visibilityManager.removePlayer(player.uuid.toString())
             
+            // Clean up vanish status tracking
+            plugin.vanishStatusMonitor.removePlayer(player.uuid)
+            
         } catch (e: Exception) {
             LobbyPlugin.logger.error("Error handling player leave for ${player.username}", e)
         }
