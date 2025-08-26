@@ -2,6 +2,7 @@ package huncho.main.lobby.listeners.player
 
 import huncho.main.lobby.LobbyPlugin
 import huncho.main.lobby.utils.MessageUtils
+import huncho.main.lobby.utils.JoinItemsUtil
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.GameMode
 import net.minestom.server.entity.Player
@@ -53,7 +54,7 @@ class PlayerJoinListener(private val plugin: LobbyPlugin) : EventListener<Player
             // player.getAttribute(Attribute.MOVEMENT_SPEED).baseValue = speed * 0.1
             
             // Give join items
-            giveJoinItems(player)
+            JoinItemsUtil.giveJoinItems(player, plugin)
             
             // Send join message
             sendJoinMessage(player)
@@ -82,58 +83,6 @@ class PlayerJoinListener(private val plugin: LobbyPlugin) : EventListener<Player
         }
     }
     
-    private fun giveJoinItems(player: Player) {
-        val joinItems = plugin.configManager.getMap(plugin.configManager.mainConfig, "lobby.join-items")
-        
-        player.inventory.clear()
-        
-        joinItems.forEach { (slotKey, itemData) ->
-            try {
-                // Parse slot - handle both String and Int keys
-                val slotStr = slotKey.toString()
-                val slot = slotStr.toIntOrNull()
-                if (slot == null) {
-                    LobbyPlugin.logger.warn("Invalid slot key: $slotKey")
-                    return@forEach
-                }
-                
-                // Parse item data
-                val itemStr = itemData.toString()
-                val parts = itemStr.split(":", limit = 2)
-                val materialName = parts[0].uppercase()
-                
-                // Try to find material by name (try both with and without minecraft namespace)
-                var material = Material.values().find { it.name() == materialName }
-                if (material == null) {
-                    // Try with lowercase and minecraft namespace
-                    material = Material.values().find { it.name() == "minecraft:${materialName.lowercase()}" }
-                }
-                
-                if (material == null) {
-                    LobbyPlugin.logger.warn("Invalid material: $materialName")
-                    // Log some common materials that might work instead
-                    val suggestions = Material.values().filter { 
-                        it.name().contains(materialName, ignoreCase = true)
-                    }.take(5).map { it.name() }
-                    if (suggestions.isNotEmpty()) {
-                        LobbyPlugin.logger.info("Did you mean one of these? $suggestions")
-                    }
-                    return@forEach
-                }
-                
-                val displayName = if (parts.size > 1) parts[1] else material.name()
-                
-                val item = ItemStack.builder(material)
-                    .customName(MessageUtils.colorize(displayName))
-                    .build()
-                
-                player.inventory.setItemStack(slot, item)
-            } catch (e: Exception) {
-                LobbyPlugin.logger.warn("Failed to give join item: slot=$slotKey, item=$itemData", e)
-            }
-        }
-    }
-    
     private fun sendJoinMessage(player: Player) {
         if (!plugin.configManager.getBoolean(plugin.configManager.mainConfig, "features.join-messages")) {
             return
@@ -153,7 +102,7 @@ class PlayerJoinListener(private val plugin: LobbyPlugin) : EventListener<Player
         player.displayName = MessageUtils.colorize(displayName)
         
         // Update tab list for all players
-        plugin.lobbyInstance.players.forEach { onlinePlayer ->
+        plugin.lobbyInstance.players.forEach { _ ->
             // This would be where you update the tab list display
             // Implementation depends on your tab list system
         }

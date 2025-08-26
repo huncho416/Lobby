@@ -9,19 +9,7 @@ import net.minestom.server.entity.Player
 class JoinQueueCommand(private val plugin: LobbyPlugin) : Command("joinqueue") {
     
     init {
-        setCondition { sender, _ ->
-            when (sender) {
-                is Player -> try {
-                    plugin.radiumIntegration.hasPermission(sender.uuid, "hub.command.queue").get() ||
-                    plugin.radiumIntegration.hasPermission(sender.uuid, "lobby.player").get() ||
-                    plugin.radiumIntegration.hasPermission(sender.uuid, "lobby.admin").get()
-                } catch (e: Exception) {
-                    true // Allow by default for queue commands
-                }
-                else -> false
-            }
-        }
-        
+        // Remove complex condition check - queue commands should be available to all players
         val queueArg = ArgumentType.Word("queue").from("practice", "minigames", "survival", "creative")
         
         addSyntax({ sender, context ->

@@ -74,20 +74,26 @@ class RadiumIntegration(
             }
             
             try {
-                // Get profile by UUID from Radium API
-                val request = buildGetRequest("/players/$uuid")
+                // First try to get by UUID using the profiles endpoint
+                val request = buildGetRequest("/v1/profiles/uuid/$uuid")
+                logger.debug("Making API request to: $baseUrl/v1/profiles/uuid/$uuid")
                 httpClient.newCall(request).execute().use { response ->
+                    logger.debug("API response code: ${response.code}")
                     if (response.isSuccessful) {
                         val body = response.body?.string() ?: return@supplyAsync null
+                        logger.debug("API response body: $body")
                         val jsonNode = objectMapper.readTree(body)
                         val playerData = parsePlayerDataFromProfile(jsonNode)
+                        logger.debug("Parsed player data - username: ${playerData.username}, rank: ${playerData.rank?.name}, permissions: ${playerData.permissions}")
                         playerCache[uuid] = playerData
                         return@supplyAsync playerData
                     } else if (response.code == 404) {
-                        // Player not found
+                        logger.debug("Player profile not found in Radium: $uuid")
+                        // Player not found - they need to connect to Radium first
                         return@supplyAsync null
                     } else {
-                        println("Error fetching player profile for $uuid: HTTP ${response.code}")
+                        val errorBody = response.body?.string() ?: "No body"
+                        logger.error("Error fetching player profile for $uuid: HTTP ${response.code} - $errorBody")
                         return@supplyAsync null
                     }
                 }
@@ -104,7 +110,7 @@ class RadiumIntegration(
     fun getPlayerDataByName(username: String): CompletableFuture<PlayerData?> {
         return CompletableFuture.supplyAsync {
             try {
-                val request = buildGetRequest("/players/$username")
+                val request = buildGetRequest("/v1/profiles/$username")
                 httpClient.newCall(request).execute().use { response ->
                     if (response.isSuccessful) {
                         val body = response.body?.string() ?: return@supplyAsync null
@@ -136,46 +142,44 @@ class RadiumIntegration(
             }
         }
     }
-    
+
+    /**
+     * Test basic API connectivity to Radium
+     */
+    fun testApiConnectivity(): CompletableFuture<Boolean> {
+        return CompletableFuture.supplyAsync {
+            try {
+                val request = buildGetRequest("/health")
+                logger.debug("Testing Radium API connectivity: $baseUrl/health")
+                httpClient.newCall(request).execute().use { response ->
+                    logger.debug("Health check response: ${response.code}")
+                    return@supplyAsync response.isSuccessful
+                }
+            } catch (e: Exception) {
+                logger.error("Failed to connect to Radium API: ${e.message}")
+                return@supplyAsync false
+            }
+        }
+    }
+
     /**
      * Check if player has permission via API
      */
     fun hasPermission(uuid: UUID, permission: String): CompletableFuture<Boolean> {
-        return getPlayerData(uuid).thenCompose { playerData ->
+        return getPlayerData(uuid).thenApply { playerData ->
             if (playerData == null) {
-                return@thenCompose CompletableFuture.completedFuture(false)
+                logger.debug("No player data found for UUID: $uuid")
+                return@thenApply false
             }
             
-            // Check cached permissions first
-            if (playerData.hasPermission(permission)) {
-                return@thenCompose CompletableFuture.completedFuture(true)
-            }
+            logger.debug("Checking permission '$permission' for player ${playerData.username} (${uuid})")
+            logger.debug("Player has ${playerData.permissions.size} direct permissions and rank: ${playerData.rank?.name}")
             
-            // Make API call to get all permissions and check locally
-            CompletableFuture.supplyAsync {
-                try {
-                    val request = buildGetRequest("/permissions/$uuid")
-                    httpClient.newCall(request).execute().use { response ->
-                        if (response.isSuccessful) {
-                            val body = response.body?.string() ?: return@supplyAsync false
-                            val jsonNode = objectMapper.readTree(body)
-                            
-                            // Parse permissions array and check if permission exists
-                            val permissions = mutableListOf<String>()
-                            jsonNode.forEach { permNode ->
-                                permissions.add(permNode.asText())
-                            }
-                            
-                            // Check if the specific permission exists
-                            return@supplyAsync checkPermissionInList(permissions, permission)
-                        }
-                        return@supplyAsync false
-                    }
-                } catch (e: Exception) {
-                    println("Error checking permission $permission for $uuid: ${e.message}")
-                    return@supplyAsync false
-                }
-            }
+            // Check all permissions via the PlayerData hasPermission method
+            val hasPermission = playerData.hasPermission(permission)
+            logger.debug("Permission check result for '$permission': $hasPermission")
+            
+            return@thenApply hasPermission
         }
     }
     
@@ -234,7 +238,7 @@ class RadiumIntegration(
     fun getAllRanks(): CompletableFuture<List<RankData>> {
         return CompletableFuture.supplyAsync {
             try {
-                val request = buildGetRequest("/ranks")
+                val request = buildGetRequest("/v1/ranks")
                 httpClient.newCall(request).execute().use { response ->
                     if (response.isSuccessful) {
                         val body = response.body?.string() ?: return@supplyAsync emptyList()
@@ -263,7 +267,7 @@ class RadiumIntegration(
     fun getRank(rankName: String): CompletableFuture<RankData?> {
         return CompletableFuture.supplyAsync {
             try {
-                val request = buildGetRequest("/ranks/$rankName")
+                val request = buildGetRequest("/v1/ranks/$rankName")
                 httpClient.newCall(request).execute().use { response ->
                     if (response.isSuccessful) {
                         val body = response.body?.string() ?: return@supplyAsync null
@@ -352,7 +356,7 @@ class RadiumIntegration(
     fun getServerList(): CompletableFuture<List<ServerData>> {
         return CompletableFuture.supplyAsync {
             try {
-                val request = buildGetRequest("/servers")
+                val request = buildGetRequest("/v1/servers")
                 httpClient.newCall(request).execute().use { response ->
                     if (response.isSuccessful) {
                         val body = response.body?.string() ?: return@supplyAsync emptyList()
@@ -394,8 +398,20 @@ class RadiumIntegration(
     
     // Player sync methods for join/leave events
     fun syncPlayerOnJoin(player: Player) {
-        // TODO: Implement player sync on join
         logger.info("Syncing player ${player.username} on join")
+        
+        // Check if player exists in Radium
+        getPlayerData(player.uuid).thenAccept { playerData ->
+            if (playerData == null) {
+                logger.info("Player ${player.username} not found in Radium - they need to connect to Radium proxy first")
+                // Player doesn't exist in Radium yet - they need to connect to the Radium proxy to be created
+            } else {
+                logger.info("Player ${player.username} found in Radium with rank: ${playerData.rank?.name ?: "None"}")
+            }
+        }.exceptionally { throwable ->
+            logger.error("Error syncing player ${player.username}: ${throwable.message}")
+            null
+        }
     }
     
     fun syncPlayerOnLeave(player: Player) {

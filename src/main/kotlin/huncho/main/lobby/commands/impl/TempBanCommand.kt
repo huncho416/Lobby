@@ -11,21 +11,7 @@ import net.minestom.server.entity.Player
 class TempBanCommand(private val plugin: LobbyPlugin) : Command("tempban") {
     
     init {
-        // Only show in tab completion for staff - Radium will handle actual permission checking
-        setCondition { sender, _ ->
-            when (sender) {
-                is Player -> {
-                    try {
-                        plugin.radiumIntegration.hasPermission(sender.uuid, "radium.command.tempban").get() ||
-                        plugin.radiumIntegration.hasPermission(sender.uuid, "lobby.admin").get()
-                    } catch (e: Exception) {
-                        false
-                    }
-                }
-                else -> true // Allow console
-            }
-        }
-        
+        // Remove complex condition check for now - handle permissions in execution
         val targetArg = ArgumentType.Word("target")
         val durationArg = ArgumentType.Word("duration")
         val reasonArg = ArgumentType.StringArray("reason")
@@ -48,7 +34,25 @@ class TempBanCommand(private val plugin: LobbyPlugin) : Command("tempban") {
                 return@addSyntax
             }
             
-            executeRadiumCommand(sender, "tempban $target $duration $reason")
+            // Use async permission checking
+            plugin.radiumIntegration.hasPermission(sender.uuid, "radium.command.tempban").thenAccept { hasRadiumPerm ->
+                plugin.radiumIntegration.hasPermission(sender.uuid, "lobby.admin").thenAccept { hasLobbyAdmin ->
+                    if (!hasRadiumPerm && !hasLobbyAdmin) {
+                        MessageUtils.sendMessage(sender, "&cYou don't have permission to use this command.")
+                        MessageUtils.sendMessage(sender, "&7Required: radium.command.tempban or lobby.admin")
+                        return@thenAccept
+                    }
+                    
+                    // Execute the command if permission check passes
+                    executeRadiumCommand(sender, "tempban $target $duration $reason")
+                }.exceptionally { ex ->
+                    MessageUtils.sendMessage(sender, "&cPermission check failed: ${ex.message}")
+                    null
+                }
+            }.exceptionally { ex ->
+                MessageUtils.sendMessage(sender, "&cPermission check failed: ${ex.message}")
+                null
+            }
             
         }, targetArg, durationArg, reasonArg)
         

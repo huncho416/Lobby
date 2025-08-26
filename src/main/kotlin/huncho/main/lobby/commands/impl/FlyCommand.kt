@@ -9,20 +9,7 @@ import net.minestom.server.entity.Player
 class FlyCommand(private val plugin: LobbyPlugin) : Command("fly") {
     
     init {
-        // Only allow admins to use fly command
-        setCondition { sender, _ ->
-            if (sender !is Player) return@setCondition true // Allow console
-            
-            try {
-                val hasAdmin = plugin.radiumIntegration.hasPermission(sender.uuid, "lobby.admin").get()
-                val hasFly = plugin.radiumIntegration.hasPermission(sender.uuid, "radium.command.fly").get()
-                return@setCondition hasAdmin || hasFly
-            } catch (e: Exception) {
-                LobbyPlugin.logger.debug("Permission check failed for ${sender.username}: ${e.message}")
-                return@setCondition false
-            }
-        }
-        
+        // Remove condition check - handle permissions in execution
         setDefaultExecutor { sender, _ ->
             if (sender !is Player) {
                 sender.sendMessage("This command can only be used by players!")

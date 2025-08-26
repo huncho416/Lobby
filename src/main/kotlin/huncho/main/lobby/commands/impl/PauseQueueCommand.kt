@@ -10,18 +10,7 @@ import net.minestom.server.entity.Player
 class PauseQueueCommand(private val plugin: LobbyPlugin) : Command("pausequeue") {
     
     init {
-        setCondition { sender, _ ->
-            when (sender) {
-                is Player -> try {
-                    plugin.radiumIntegration.hasPermission(sender.uuid, "hub.pausequeue").get() ||
-                    plugin.radiumIntegration.hasPermission(sender.uuid, "lobby.admin").get()
-                } catch (e: Exception) {
-                    false
-                }
-                else -> true // Allow console
-            }
-        }
-        
+        // Remove condition check - handle permissions in execution
         val queueArg = ArgumentType.Word("queue").from("practice", "minigames", "survival", "creative")
         
         addSyntax({ sender, context ->

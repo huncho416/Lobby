@@ -200,6 +200,24 @@ object LobbyPlugin {
         }
     }
     
+    fun shutdown() {
+        logger.info("Shutting down Lobby Plugin...")
+        
+        try {
+            // Shutdown event manager and join item monitor
+            if (::eventManager.isInitialized) {
+                eventManager.shutdown()
+            }
+            
+            // Cancel all coroutines
+            coroutineScope.cancel()
+            
+            logger.info("Lobby Plugin shutdown complete!")
+        } catch (e: Exception) {
+            logger.error("Error during plugin shutdown", e)
+        }
+    }
+    
     fun reload() {
         logger.info("Reloading Lobby Plugin...")
         

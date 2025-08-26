@@ -9,19 +9,7 @@ import net.minestom.server.entity.Player
 class SetSpawnCommand(private val plugin: LobbyPlugin) : Command("setspawn") {
     
     init {
-        setCondition { sender, _ ->
-            if (sender !is Player) return@setCondition true // Allow console
-            
-            try {
-                val hasSetSpawn = plugin.radiumIntegration.hasPermission(sender.uuid, "radium.command.setspawn").get()
-                val hasLobbyAdmin = plugin.radiumIntegration.hasPermission(sender.uuid, "lobby.admin").get()
-                return@setCondition hasSetSpawn || hasLobbyAdmin
-            } catch (e: Exception) {
-                LobbyPlugin.logger.debug("Permission check failed for ${sender.username}: ${e.message}")
-                return@setCondition false
-            }
-        }
-        
+        // Remove condition check - handle permissions in execution
         setDefaultExecutor { sender, _ ->
             if (sender !is Player) {
                 sender.sendMessage("This command can only be used by players!")

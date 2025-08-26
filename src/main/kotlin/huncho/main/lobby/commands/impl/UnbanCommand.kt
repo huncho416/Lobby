@@ -11,21 +11,7 @@ import net.minestom.server.entity.Player
 class UnbanCommand(private val plugin: LobbyPlugin) : Command("unban") {
     
     init {
-        // Only show in tab completion for staff - Radium will handle actual permission checking
-        setCondition { sender, _ ->
-            when (sender) {
-                is Player -> {
-                    try {
-                        plugin.radiumIntegration.hasPermission(sender.uuid, "radium.command.unban").get() ||
-                        plugin.radiumIntegration.hasPermission(sender.uuid, "lobby.admin").get()
-                    } catch (e: Exception) {
-                        false
-                    }
-                }
-                else -> true // Allow console
-            }
-        }
-        
+        // Remove complex condition check for now - handle permissions in execution
         val targetArg = ArgumentType.Word("target")
         val reasonArg = ArgumentType.StringArray("reason")
         
@@ -45,7 +31,33 @@ class UnbanCommand(private val plugin: LobbyPlugin) : Command("unban") {
                 return@addSyntax
             }
             
-            executeRadiumCommand(sender, "unban $target $reason")
+            // Use async permission checking with debug logging
+            LobbyPlugin.logger.info("Checking permissions for ${sender.username}: radium.command.unban and lobby.admin")
+            
+            plugin.radiumIntegration.hasPermission(sender.uuid, "radium.command.unban").thenAccept { hasRadiumPerm ->
+                LobbyPlugin.logger.info("${sender.username} - radium.command.unban: $hasRadiumPerm")
+                
+                plugin.radiumIntegration.hasPermission(sender.uuid, "lobby.admin").thenAccept { hasLobbyAdmin ->
+                    LobbyPlugin.logger.info("${sender.username} - lobby.admin: $hasLobbyAdmin")
+                    
+                    if (!hasRadiumPerm && !hasLobbyAdmin) {
+                        MessageUtils.sendMessage(sender, "&cYou don't have permission to use this command.")
+                        MessageUtils.sendMessage(sender, "&7Required: radium.command.unban or lobby.admin")
+                        MessageUtils.sendMessage(sender, "&7Debug: radium.command.unban=$hasRadiumPerm, lobby.admin=$hasLobbyAdmin")
+                        return@thenAccept
+                    }
+                    
+                    // Execute the command if permission check passes
+                    LobbyPlugin.logger.info("${sender.username} passed permission check, executing unban command")
+                    executeRadiumCommand(sender, "unban $target $reason")
+                }.exceptionally { ex ->
+                    MessageUtils.sendMessage(sender, "&cPermission check failed: ${ex.message}")
+                    null
+                }
+            }.exceptionally { ex ->
+                MessageUtils.sendMessage(sender, "&cPermission check failed: ${ex.message}")
+                null
+            }
             
         }, targetArg, reasonArg)
         

@@ -11,21 +11,7 @@ import net.minestom.server.entity.Player
 class UnmuteCommand(private val plugin: LobbyPlugin) : Command("unmute") {
     
     init {
-        // Only show in tab completion for staff - Radium will handle actual permission checking
-        setCondition { sender, _ ->
-            when (sender) {
-                is Player -> {
-                    try {
-                        plugin.radiumIntegration.hasPermission(sender.uuid, "radium.command.unmute").get() ||
-                        plugin.radiumIntegration.hasPermission(sender.uuid, "lobby.admin").get()
-                    } catch (e: Exception) {
-                        false
-                    }
-                }
-                else -> true // Allow console
-            }
-        }
-        
+        // Remove complex condition check for now - handle permissions in execution
         val targetArg = ArgumentType.Word("target")
         val reasonArg = ArgumentType.StringArray("reason")
         
@@ -45,7 +31,25 @@ class UnmuteCommand(private val plugin: LobbyPlugin) : Command("unmute") {
                 return@addSyntax
             }
             
-            executeRadiumCommand(sender, "unmute $target $reason")
+            // Use async permission checking
+            plugin.radiumIntegration.hasPermission(sender.uuid, "radium.command.unmute").thenAccept { hasRadiumPerm ->
+                plugin.radiumIntegration.hasPermission(sender.uuid, "lobby.admin").thenAccept { hasLobbyAdmin ->
+                    if (!hasRadiumPerm && !hasLobbyAdmin) {
+                        MessageUtils.sendMessage(sender, "&cYou don't have permission to use this command.")
+                        MessageUtils.sendMessage(sender, "&7Required: radium.command.unmute or lobby.admin")
+                        return@thenAccept
+                    }
+                    
+                    // Execute the command if permission check passes
+                    executeRadiumCommand(sender, "unmute $target $reason")
+                }.exceptionally { ex ->
+                    MessageUtils.sendMessage(sender, "&cPermission check failed: ${ex.message}")
+                    null
+                }
+            }.exceptionally { ex ->
+                MessageUtils.sendMessage(sender, "&cPermission check failed: ${ex.message}")
+                null
+            }
             
         }, targetArg, reasonArg)
         

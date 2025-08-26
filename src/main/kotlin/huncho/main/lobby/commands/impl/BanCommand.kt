@@ -11,20 +11,7 @@ import net.minestom.server.entity.Player
 class BanCommand(private val plugin: LobbyPlugin) : Command("ban") {
     
     init {
-        // Only show in tab completion for staff - Radium will handle actual permission checking
-        setCondition { sender, _ ->
-            if (sender !is Player) return@setCondition true // Allow console
-            
-            try {
-                val hasRadiumPerm = plugin.radiumIntegration.hasPermission(sender.uuid, "radium.command.ban").get()
-                val hasLobbyAdmin = plugin.radiumIntegration.hasPermission(sender.uuid, "lobby.admin").get()
-                return@setCondition hasRadiumPerm || hasLobbyAdmin
-            } catch (e: Exception) {
-                LobbyPlugin.logger.debug("Permission check failed for ${sender.username}: ${e.message}")
-                return@setCondition false
-            }
-        }
-        
+        // Remove complex condition check for now - handle permissions in execution
         val targetArg = ArgumentType.Word("target")
         val reasonArg = ArgumentType.StringArray("reason")
         
@@ -44,7 +31,25 @@ class BanCommand(private val plugin: LobbyPlugin) : Command("ban") {
                 return@addSyntax
             }
             
-            executeRadiumCommand(sender, "ban $target $reason")
+            // Use async permission checking
+            plugin.radiumIntegration.hasPermission(sender.uuid, "radium.command.ban").thenAccept { hasRadiumPerm ->
+                plugin.radiumIntegration.hasPermission(sender.uuid, "lobby.admin").thenAccept { hasLobbyAdmin ->
+                    if (!hasRadiumPerm && !hasLobbyAdmin) {
+                        MessageUtils.sendMessage(sender, "&cYou don't have permission to use this command.")
+                        MessageUtils.sendMessage(sender, "&7Required: radium.command.ban or lobby.admin")
+                        return@thenAccept
+                    }
+                    
+                    // Execute the command if permission check passes
+                    executeRadiumCommand(sender, "ban $target $reason")
+                }.exceptionally { ex ->
+                    MessageUtils.sendMessage(sender, "&cPermission check failed: ${ex.message}")
+                    null
+                }
+            }.exceptionally { ex ->
+                MessageUtils.sendMessage(sender, "&cPermission check failed: ${ex.message}")
+                null
+            }
             
         }, targetArg, reasonArg)
         
