@@ -20,12 +20,6 @@ class CommandManager(private val plugin: LobbyPlugin) {
     }
     
     private fun registerCommands() {
-        // Test command to verify registration
-        registerMinestomCommand(TestVisibilityCommand(plugin))
-        
-        // Debug command to check permissions
-        registerMinestomCommand(DebugPermissionsCommand(plugin))
-        
         // Core commands
         registerMinestomCommand(HubCoreCommand(plugin))
         registerMinestomCommand(SpawnCommand(plugin))
