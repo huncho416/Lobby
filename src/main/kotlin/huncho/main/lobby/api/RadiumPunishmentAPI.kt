@@ -1,219 +1,193 @@
 package huncho.main.lobby.api
 
 import com.google.gson.Gson
-import huncho.main.lobby.LobbyPlugin
-import okhttp3.*
+import com.google.gson.JsonSyntaxException
+import huncho.main.lobby.models.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import java.util.concurrent.CompletableFuture
+import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeUnit
 
 /**
- * API client for communicating with Radium proxy punishment system
+ * API client for Radium's punishment system
+ * Uses the proper /api/punishments endpoints with correct DTOs
  */
-class RadiumPunishmentAPI(private val baseUrl: String = "http://localhost:8080") {
+class RadiumPunishmentAPI(private val radiumApiUrl: String = "http://localhost:8080") {
     
+    private val logger = LoggerFactory.getLogger(RadiumPunishmentAPI::class.java)
     private val client = OkHttpClient.Builder()
-        .connectTimeout(5, TimeUnit.SECONDS)
-        .writeTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(10, TimeUnit.SECONDS)
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(15, TimeUnit.SECONDS)
         .build()
     
     private val gson = Gson()
     private val jsonMediaType = "application/json".toMediaType()
-    
+
     /**
-     * Issue a punishment (ban, mute, warn, etc.)
+     * Issue a punishment using Radium's /api/punishments/issue endpoint
      */
-    fun issuePunishment(request: PunishmentRequest): CompletableFuture<PunishmentResponse> {
-        return CompletableFuture.supplyAsync {
+    suspend fun issuePunishment(request: PunishmentRequest): PunishmentApiResult {
+        return withContext(Dispatchers.IO) {
             try {
-                val body = gson.toJson(request).toRequestBody(jsonMediaType)
+                val requestBody = gson.toJson(request).toRequestBody(jsonMediaType)
+                
                 val httpRequest = Request.Builder()
-                    .url("$baseUrl/api/v1/punishments/issue")
-                    .post(body)
+                    .url("$radiumApiUrl/api/punishments/issue")
+                    .post(requestBody)
+                    .header("Content-Type", "application/json")
                     .build()
 
+                logger.debug("Issuing punishment via API: ${request.type} for ${request.target} by ${request.staffId}")
+
                 client.newCall(httpRequest).execute().use { response ->
-                    val responseBody = response.body?.string() ?: ""
+                    val responseBody = response.body?.string()
                     
-                    if (response.isSuccessful) {
-                        gson.fromJson(responseBody, PunishmentResponse::class.java)
-                    } else {
-                        PunishmentResponse(
-                            success = false,
-                            target = request.target,
-                            type = request.type,
-                            message = "API Error: ${response.code} - $responseBody"
-                        )
+                    when {
+                        response.isSuccessful -> {
+                            try {
+                                val punishmentResponse = gson.fromJson(responseBody, PunishmentResponse::class.java)
+                                logger.info("Successfully issued ${request.type} for ${request.target}: ${punishmentResponse.message}")
+                                PunishmentApiResult.Success(punishmentResponse)
+                            } catch (e: JsonSyntaxException) {
+                                logger.error("Invalid JSON response from punishment API: $responseBody", e)
+                                PunishmentApiResult.Error("Invalid response format from server")
+                            }
+                        }
+                        response.code == 400 -> {
+                            try {
+                                val errorResponse = gson.fromJson(responseBody, ErrorResponse::class.java)
+                                logger.warn("Bad request for punishment: ${errorResponse.message}")
+                                PunishmentApiResult.Error(errorResponse.message)
+                            } catch (e: JsonSyntaxException) {
+                                PunishmentApiResult.Error("Bad request: $responseBody")
+                            }
+                        }
+                        response.code == 404 -> {
+                            PunishmentApiResult.Error("Player or staff member not found")
+                        }
+                        response.code == 500 -> {
+                            logger.error("Server error when issuing punishment: $responseBody")
+                            PunishmentApiResult.Error("Server error occurred")
+                        }
+                        else -> {
+                            logger.error("Unexpected response from punishment API: ${response.code} - $responseBody")
+                            PunishmentApiResult.Error("Unexpected error: ${response.code}")
+                        }
                     }
                 }
             } catch (e: Exception) {
-                LobbyPlugin.logger.error("Failed to issue punishment via API", e)
-                PunishmentResponse(
-                    success = false,
-                    target = request.target,
-                    type = request.type,
-                    message = "Connection error: ${e.message}"
-                )
+                logger.error("Failed to connect to punishment API", e)
+                PunishmentApiResult.Error("Connection error: ${e.message}")
             }
         }
     }
-    
+
     /**
-     * Revoke a punishment (unban, unmute, etc.)
+     * Revoke a punishment using Radium's /api/punishments/revoke endpoint
      */
-    fun revokePunishment(request: PunishmentRevokeRequest): CompletableFuture<PunishmentResponse> {
-        return CompletableFuture.supplyAsync {
+    suspend fun revokePunishment(request: PunishmentRevokeRequest): PunishmentApiResult {
+        return withContext(Dispatchers.IO) {
             try {
-                val body = gson.toJson(request).toRequestBody(jsonMediaType)
+                val requestBody = gson.toJson(request).toRequestBody(jsonMediaType)
+                
                 val httpRequest = Request.Builder()
-                    .url("$baseUrl/api/v1/punishments/revoke")
-                    .post(body)
+                    .url("$radiumApiUrl/api/punishments/revoke")
+                    .post(requestBody)
+                    .header("Content-Type", "application/json")
                     .build()
 
+                logger.debug("Revoking punishment via API: ${request.type} for ${request.target} by ${request.staffId}")
+
                 client.newCall(httpRequest).execute().use { response ->
-                    val responseBody = response.body?.string() ?: ""
+                    val responseBody = response.body?.string()
                     
-                    if (response.isSuccessful) {
-                        gson.fromJson(responseBody, PunishmentResponse::class.java)
-                    } else {
-                        PunishmentResponse(
-                            success = false,
-                            target = request.target,
-                            type = request.type,
-                            message = "API Error: ${response.code} - $responseBody"
-                        )
+                    when {
+                        response.isSuccessful -> {
+                            try {
+                                val punishmentResponse = gson.fromJson(responseBody, PunishmentResponse::class.java)
+                                logger.info("Successfully revoked ${request.type} for ${request.target}: ${punishmentResponse.message}")
+                                PunishmentApiResult.Success(punishmentResponse)
+                            } catch (e: JsonSyntaxException) {
+                                logger.error("Invalid JSON response from punishment API: $responseBody", e)
+                                PunishmentApiResult.Error("Invalid response format from server")
+                            }
+                        }
+                        response.code == 400 -> {
+                            try {
+                                val errorResponse = gson.fromJson(responseBody, ErrorResponse::class.java)
+                                logger.warn("Bad request for punishment revocation: ${errorResponse.message}")
+                                PunishmentApiResult.Error(errorResponse.message)
+                            } catch (e: JsonSyntaxException) {
+                                PunishmentApiResult.Error("Bad request: $responseBody")
+                            }
+                        }
+                        response.code == 404 -> {
+                            PunishmentApiResult.Error("Player, staff member, or punishment not found")
+                        }
+                        response.code == 500 -> {
+                            logger.error("Server error when revoking punishment: $responseBody")
+                            PunishmentApiResult.Error("Server error occurred")
+                        }
+                        else -> {
+                            logger.error("Unexpected response from punishment API: ${response.code} - $responseBody")
+                            PunishmentApiResult.Error("Unexpected error: ${response.code}")
+                        }
                     }
                 }
             } catch (e: Exception) {
-                LobbyPlugin.logger.error("Failed to revoke punishment via API", e)
-                PunishmentResponse(
-                    success = false,
-                    target = request.target,
-                    type = request.type,
-                    message = "Connection error: ${e.message}"
-                )
+                logger.error("Failed to connect to punishment API", e)
+                PunishmentApiResult.Error("Connection error: ${e.message}")
             }
         }
     }
-    
+
     /**
-     * Check punishment history for a player
+     * Get active punishments for a player
      */
-    fun checkPunishments(playerName: String): CompletableFuture<PunishmentHistoryResponse> {
-        return CompletableFuture.supplyAsync {
+    suspend fun getActivePunishments(playerUuid: String): List<Punishment> {
+        return withContext(Dispatchers.IO) {
             try {
                 val httpRequest = Request.Builder()
-                    .url("$baseUrl/api/v1/punishments/$playerName")
+                    .url("$radiumApiUrl/api/punishments/player/$playerUuid")
                     .get()
                     .build()
 
                 client.newCall(httpRequest).execute().use { response ->
-                    val responseBody = response.body?.string() ?: ""
-                    
                     if (response.isSuccessful) {
-                        gson.fromJson(responseBody, PunishmentHistoryResponse::class.java)
+                        val responseBody = response.body?.string()
+                        try {
+                            val punishments = gson.fromJson(responseBody, Array<Punishment>::class.java)
+                            punishments?.filter { it.isCurrentlyActive() } ?: emptyList()
+                        } catch (e: JsonSyntaxException) {
+                            logger.error("Invalid JSON response when getting punishments: $responseBody", e)
+                            emptyList()
+                        }
                     } else {
-                        PunishmentHistoryResponse(
-                            target = playerName,
-                            targetId = null,
-                            totalPunishments = 0,
-                            activePunishments = 0,
-                            punishments = emptyList(),
-                            error = "API Error: ${response.code} - $responseBody"
-                        )
+                        logger.warn("Failed to get punishments for player $playerUuid: ${response.code}")
+                        emptyList()
                     }
                 }
             } catch (e: Exception) {
-                LobbyPlugin.logger.error("Failed to check punishments via API", e)
-                PunishmentHistoryResponse(
-                    target = playerName,
-                    targetId = null,
-                    totalPunishments = 0,
-                    activePunishments = 0,
-                    punishments = emptyList(),
-                    error = "Connection error: ${e.message}"
-                )
-            }
-        }
-    }
-    
-    /**
-     * Execute a command via the Radium proxy
-     */
-    fun executeCommand(staffPlayer: String, command: String): CompletableFuture<Boolean> {
-        return CompletableFuture.supplyAsync {
-            try {
-                val request = CommandExecuteRequest(staffPlayer, command)
-                val body = gson.toJson(request).toRequestBody(jsonMediaType)
-                val httpRequest = Request.Builder()
-                    .url("$baseUrl/api/v1/commands/execute")
-                    .post(body)
-                    .build()
-
-                client.newCall(httpRequest).execute().use { response ->
-                    response.isSuccessful
-                }
-            } catch (e: Exception) {
-                LobbyPlugin.logger.error("Failed to execute command via API", e)
-                false
+                logger.error("Failed to get punishments for player $playerUuid", e)
+                emptyList()
             }
         }
     }
 }
 
-// Data classes for API requests and responses
-data class PunishmentRequest(
-    val target: String,
-    val type: String,
-    val reason: String,
-    val staffId: String,
-    val duration: String? = null,
-    val silent: Boolean = false,
-    val clearInventory: Boolean = false
-)
-
-data class PunishmentRevokeRequest(
-    val target: String,
-    val type: String,
-    val reason: String,
-    val staffId: String,
-    val silent: Boolean = false
-)
-
-data class PunishmentResponse(
-    val success: Boolean,
-    val target: String,
-    val type: String,
-    val reason: String? = null,
-    val staff: String? = null,
-    val message: String
-)
-
-data class PunishmentHistoryResponse(
-    val target: String,
-    val targetId: String?,
-    val totalPunishments: Int,
-    val activePunishments: Int,
-    val punishments: List<PunishmentEntry>,
-    val error: String? = null
-)
-
-data class PunishmentEntry(
-    val id: String,
-    val type: String,
-    val reason: String,
-    val issuedBy: String,
-    val issuedAt: Long,
-    val expiresAt: Long?,
-    val active: Boolean,
-    val revokedBy: String?,
-    val revokedAt: Long?,
-    val revokeReason: String?
-)
-
-data class CommandExecuteRequest(
-    val player: String,
-    val command: String
-)
+/**
+ * Result wrapper for punishment API operations
+ */
+sealed class PunishmentApiResult {
+    data class Success(val response: PunishmentResponse) : PunishmentApiResult()
+    data class Error(val message: String) : PunishmentApiResult()
+    
+    val isSuccess: Boolean get() = this is Success
+    val isError: Boolean get() = this is Error
+    
+    fun getErrorMessage(): String? = (this as? Error)?.message
+}

@@ -19,6 +19,28 @@ class PlayerChatListener(private val plugin: LobbyPlugin) : EventListener<Player
         
         runBlocking {
             try {
+                // Check if player is muted first
+                val punishmentService = plugin.punishmentService
+                if (punishmentService != null) {
+                    val isMuted = punishmentService.isPlayerMuted(player.uuid).join()
+                    
+                    if (isMuted) {
+                        // Get the active mute for details
+                        val mute = punishmentService.getActiveMute(player.uuid).join()
+                        
+                        val muteMessage = if (mute != null) {
+                            buildMuteMessage(mute.getDisplayReason(), mute.expiresAt)
+                        } else {
+                            "&cYou are muted and cannot send messages!"
+                        }
+                        
+                        MessageUtils.sendMessage(player, muteMessage)
+                        return@runBlocking
+                    }
+                } else {
+                    LobbyPlugin.logger.warn("PunishmentService not available, skipping mute check for ${player.username}")
+                }
+                
                 // Check if player has permission to chat
                 val hasPermission = plugin.radiumIntegration.hasPermission(player.uuid, "lobby.chat").join()
                 val hasAdmin = plugin.radiumIntegration.hasPermission(player.uuid, "lobby.admin").join()
@@ -71,5 +93,42 @@ class PlayerChatListener(private val plugin: LobbyPlugin) : EventListener<Player
         }
         
         return EventListener.Result.SUCCESS
+    }
+    
+    /**
+     * Build a mute message with reason and expiration details
+     */
+    private fun buildMuteMessage(reason: String, expiresAt: Long?): String {
+        val sb = StringBuilder()
+        sb.append("&cYou are muted!")
+        sb.append("\n&7Reason: &f").append(reason)
+        
+        if (expiresAt != null) {
+            val remaining = expiresAt - System.currentTimeMillis()
+            if (remaining > 0) {
+                sb.append("\n&7Expires in: &e").append(formatDuration(remaining))
+            }
+        } else {
+            sb.append("\n&4This mute is permanent.")
+        }
+        
+        return sb.toString()
+    }
+    
+    /**
+     * Format duration in a human-readable format
+     */
+    private fun formatDuration(millis: Long): String {
+        val seconds = millis / 1000
+        val minutes = seconds / 60
+        val hours = minutes / 60
+        val days = hours / 24
+        
+        return when {
+            days > 0 -> "${days}d ${hours % 24}h ${minutes % 60}m"
+            hours > 0 -> "${hours}h ${minutes % 60}m ${seconds % 60}s"
+            minutes > 0 -> "${minutes}m ${seconds % 60}s"
+            else -> "${seconds}s"
+        }
     }
 }

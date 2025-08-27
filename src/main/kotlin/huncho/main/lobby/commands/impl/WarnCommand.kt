@@ -2,7 +2,7 @@ package huncho.main.lobby.commands.impl
 
 import huncho.main.lobby.LobbyPlugin
 import huncho.main.lobby.api.PunishmentApiResult
-import huncho.main.lobby.models.PunishmentRevokeRequest
+import huncho.main.lobby.models.PunishmentRequest
 import huncho.main.lobby.utils.MessageUtils
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
@@ -10,14 +10,14 @@ import net.minestom.server.command.builder.Command
 import net.minestom.server.command.builder.arguments.ArgumentType
 import net.minestom.server.entity.Player
 
-class UnbanCommand(private val plugin: LobbyPlugin) : Command("unban") {
+class WarnCommand(private val plugin: LobbyPlugin) : Command("warn") {
     
     init {
         // Only show command to players with permission
         setCondition { sender, _ ->
             when (sender) {
                 is Player -> try {
-                    plugin.radiumIntegration.hasPermission(sender.uuid, "radium.punish.unban").get() ||
+                    plugin.radiumIntegration.hasPermission(sender.uuid, "radium.punish.warn").get() ||
                     plugin.radiumIntegration.hasPermission(sender.uuid, "lobby.admin").get()
                 } catch (e: Exception) {
                     false
@@ -29,7 +29,7 @@ class UnbanCommand(private val plugin: LobbyPlugin) : Command("unban") {
         val targetArg = ArgumentType.Word("target")
         val reasonArg = ArgumentType.StringArray("reason")
         
-        // /unban <target> <reason...>
+        // /warn <target> <reason...>
         addSyntax({ sender, context ->
             if (sender !is Player) {
                 sender.sendMessage("This command can only be used by players!")
@@ -41,29 +41,21 @@ class UnbanCommand(private val plugin: LobbyPlugin) : Command("unban") {
             val reason = reasonArray.joinToString(" ")
             
             if (reason.isBlank()) {
-                MessageUtils.sendMessage(sender, "&cUsage: /unban <player> <reason>")
+                MessageUtils.sendMessage(sender, "&cUsage: /warn <player> <reason>")
                 return@addSyntax
             }
             
-            // Use async permission checking with debug logging
-            LobbyPlugin.logger.info("Checking permissions for ${sender.username}: radium.punish.unban and lobby.admin")
-            
-            plugin.radiumIntegration.hasPermission(sender.uuid, "radium.punish.unban").thenAccept { hasRadiumPerm ->
-                LobbyPlugin.logger.info("${sender.username} - radium.punish.unban: $hasRadiumPerm")
-                
+            // Use async permission checking
+            plugin.radiumIntegration.hasPermission(sender.uuid, "radium.punish.warn").thenAccept { hasRadiumPerm ->
                 plugin.radiumIntegration.hasPermission(sender.uuid, "lobby.admin").thenAccept { hasLobbyAdmin ->
-                    LobbyPlugin.logger.info("${sender.username} - lobby.admin: $hasLobbyAdmin")
-                    
                     if (!hasRadiumPerm && !hasLobbyAdmin) {
                         MessageUtils.sendMessage(sender, "&cYou don't have permission to use this command.")
-                        MessageUtils.sendMessage(sender, "&7Required: radium.punish.unban or lobby.admin")
-                        MessageUtils.sendMessage(sender, "&7Debug: radium.punish.unban=$hasRadiumPerm, lobby.admin=$hasLobbyAdmin")
+                        MessageUtils.sendMessage(sender, "&7Required: radium.punish.warn or lobby.admin")
                         return@thenAccept
                     }
                     
-                    // Execute the command if permission check passes
-                    LobbyPlugin.logger.info("${sender.username} passed permission check, executing unban command")
-                    executeUnbanPunishment(sender, target, reason)
+                    // Execute the punishment using the proper API
+                    executeWarnPunishment(sender, target, reason)
                 }.exceptionally { ex ->
                     MessageUtils.sendMessage(sender, "&cPermission check failed: ${ex.message}")
                     null
@@ -77,37 +69,40 @@ class UnbanCommand(private val plugin: LobbyPlugin) : Command("unban") {
         
         setDefaultExecutor { sender, _ ->
             if (sender is Player) {
-                MessageUtils.sendMessage(sender, "&cUsage: /unban <player> <reason>")
+                MessageUtils.sendMessage(sender, "&cUsage: /warn <player> <reason>")
             }
         }
     }
     
-    private fun executeUnbanPunishment(player: Player, target: String, reason: String) {
+    private fun executeWarnPunishment(player: Player, target: String, reason: String) {
         GlobalScope.launch {
             try {
-                val request = PunishmentRevokeRequest(
+                val request = PunishmentRequest(
                     target = target,
-                    type = "BAN",
+                    type = "WARN",
                     reason = reason,
                     staffId = player.uuid.toString(),
-                    silent = false
+                    duration = null, // Warnings can be permanent or have duration
+                    silent = false,
+                    clearInventory = false,
+                    priority = PunishmentRequest.Priority.NORMAL
                 )
                 
-                val result = plugin.radiumPunishmentAPI.revokePunishment(request)
+                val result = plugin.radiumPunishmentAPI.issuePunishment(request)
                 
                 val message = if (result.isSuccess) {
                     val response = (result as PunishmentApiResult.Success).response
-                    "&aSuccessfully unbanned ${response.target}: ${response.message}"
+                    "&aSuccessfully warned ${response.target}: ${response.message}"
                 } else {
-                    "&cFailed to unban $target: ${result.getErrorMessage()}"
+                    "&cFailed to warn $target: ${result.getErrorMessage()}"
                 }
                 
                 MessageUtils.sendMessage(player, message)
-                LobbyPlugin.logger.info("${player.username} attempted to unban $target - Success: ${result.isSuccess}")
+                LobbyPlugin.logger.info("${player.username} attempted to warn $target - Success: ${result.isSuccess}")
                 
             } catch (e: Exception) {
-                MessageUtils.sendMessage(player, "&cAn error occurred while processing the unban: ${e.message}")
-                LobbyPlugin.logger.error("Error processing unban command from ${player.username}", e)
+                MessageUtils.sendMessage(player, "&cAn error occurred while processing the warning: ${e.message}")
+                LobbyPlugin.logger.error("Error processing warn command from ${player.username}", e)
             }
         }
     }

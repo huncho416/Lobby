@@ -37,7 +37,7 @@ schematics:
   cache_max_size: 10
   files:
     lobby:
-      file: "schematics/lobby.schem"
+      file: "schematics/test.schem"
       origin:
         x: 0
         y: 64
@@ -46,6 +46,16 @@ schematics:
       mirror: false
       paste_air: false
       enabled: true
+    test:
+      file: "schematics/test.schem"
+      origin:
+        x: 100
+        y: 64
+        z: 0
+      rotation: 0
+      mirror: false
+      paste_air: false
+      enabled: false
 
 lobby:
   join-items:

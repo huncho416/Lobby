@@ -58,6 +58,9 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.google.code.gson:gson:2.10.1")
     
+    // Redis for real-time punishment/mute checks
+    implementation("io.lettuce:lettuce-core:6.3.0.RELEASE")
+    
     // Schematics
     implementation("dev.hollowcube:schem:1.3.1")
     

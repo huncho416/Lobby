@@ -31,7 +31,7 @@ class CommandManager(private val plugin: LobbyPlugin) {
         registerMinestomCommand(LeaveQueueCommand(plugin))
         registerMinestomCommand(PauseQueueCommand(plugin))
         
-        // Punishment commands (forwarded to Radium)
+        // Punishment commands (using proper Radium API)
         LobbyPlugin.logger.info("Registering punishment commands...")
         registerMinestomCommand(BanCommand(plugin))
         registerMinestomCommand(TempBanCommand(plugin))
@@ -39,6 +39,9 @@ class CommandManager(private val plugin: LobbyPlugin) {
         registerMinestomCommand(MuteCommand(plugin))
         registerMinestomCommand(UnmuteCommand(plugin))
         registerMinestomCommand(KickCommand(plugin))
+        registerMinestomCommand(WarnCommand(plugin))
+        registerMinestomCommand(BlacklistCommand(plugin))
+        registerMinestomCommand(UnblacklistCommand(plugin))
         registerMinestomCommand(CheckPunishmentsCommand(plugin))
         LobbyPlugin.logger.info("Punishment commands registration completed")
         

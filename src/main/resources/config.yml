@@ -1,17 +1,62 @@
 radium:
   api:
-    base_url: "http://localhost:8080"
-    timeout: 5000
+    base_url: "http://localhost:schematics:
+  enabled: true
+  paste_on_startup: true
+  async_operations: true
+  cache_enabled: true
+  cache_max_size: 10
+  files:
+    lobby:
+      file: "schematics/lobby.schematic"
+      origin:
+        x: 0
+        y: 64
+        z: 0
+      rotation: 0  # 0, 90, 180, 270 degrees
+      mirror: false
+      paste_air: false
+      enabled: true
+    test:
+      file: "schematics/test.schem"
+      origin:
+        x: 100
+        y: 64
+        z: 0
+      rotation: 0
+      mirror: false
+      paste_air: false
+      enabled: falset: 5000
     retry_attempts: 3
     cache_duration: 300 # 5 minutes
   fallback:
     default_rank: "Default"
     default_prefix: "&7"
-  # Vanish Integration
+  # Hybrid Vanish Integration
   vanish:
-    respect_status: true  # NEW: Respect vanish status from proxy
-    hide_from_tab: true   # NEW: Hide vanished players from tab if viewer can't see them
-    cache_duration: 30    # NEW: Cache vanish status for X seconds
+    respect_status: true      # NEW: Respect vanish status from proxy via plugin messages
+    hybrid_mode: true         # NEW: Use hybrid vanish system (plugin messages + HTTP fallback)
+    hide_from_tab: true       # NEW: Hide vanished players from tab if viewer can't see them
+    cache_duration: 30        # NEW: Cache vanish status for X seconds
+    # NOTE: The hybrid system uses plugin messages from Radium proxy for real-time updates
+    # and falls back to HTTP API '/api/players/uuid/{uuid}/vanish' when needed:
+    # - 200 + {"vanished": boolean, "level": "HELPER|MODERATOR|ADMIN|OWNER"} for online players
+    # - 404 for offline/disconnected players (treated as not vanished)
+
+# Redis Configuration for Real-time Punishment Updates
+redis:
+  enabled: true
+  host: "localhost"
+  port: 6379
+  password: ""  # Leave empty if no password
+  database: 0
+  timeout: 5000  # Connection timeout in milliseconds
+  cache:
+    punishment_ttl: 300  # Cache punishment data for 5 minutes
+    mute_ttl: 300       # Cache mute data for 5 minutes
+  channels:
+    punishment_updates: "radium:punishment:updates"
+    mute_updates: "radium:mute:updates"
 
 # HTTP API for gamemode synchronization with Radium proxy
 http_api:
@@ -37,7 +82,7 @@ schematics:
   cache_max_size: 10
   files:
     lobby:
-      file: "schematics/lobby.schem"
+      file: "schematics/lobby.schematic"
       origin:
         x: 0
         y: 64
@@ -46,6 +91,16 @@ schematics:
       mirror: false
       paste_air: false
       enabled: true
+    test:
+      file: "schematics/test.schem"
+      origin:
+        x: 20
+        y: 64
+        z: 20
+      rotation: 0
+      mirror: false
+      paste_air: false
+      enabled: false  # Don't paste automatically
 
 lobby:
   join-items:

@@ -10,14 +10,14 @@ import net.minestom.server.command.builder.Command
 import net.minestom.server.command.builder.arguments.ArgumentType
 import net.minestom.server.entity.Player
 
-class UnbanCommand(private val plugin: LobbyPlugin) : Command("unban") {
+class UnblacklistCommand(private val plugin: LobbyPlugin) : Command("unblacklist") {
     
     init {
         // Only show command to players with permission
         setCondition { sender, _ ->
             when (sender) {
                 is Player -> try {
-                    plugin.radiumIntegration.hasPermission(sender.uuid, "radium.punish.unban").get() ||
+                    plugin.radiumIntegration.hasPermission(sender.uuid, "radium.punish.unblacklist").get() ||
                     plugin.radiumIntegration.hasPermission(sender.uuid, "lobby.admin").get()
                 } catch (e: Exception) {
                     false
@@ -29,7 +29,7 @@ class UnbanCommand(private val plugin: LobbyPlugin) : Command("unban") {
         val targetArg = ArgumentType.Word("target")
         val reasonArg = ArgumentType.StringArray("reason")
         
-        // /unban <target> <reason...>
+        // /unblacklist <target> <reason...>
         addSyntax({ sender, context ->
             if (sender !is Player) {
                 sender.sendMessage("This command can only be used by players!")
@@ -41,29 +41,21 @@ class UnbanCommand(private val plugin: LobbyPlugin) : Command("unban") {
             val reason = reasonArray.joinToString(" ")
             
             if (reason.isBlank()) {
-                MessageUtils.sendMessage(sender, "&cUsage: /unban <player> <reason>")
+                MessageUtils.sendMessage(sender, "&cUsage: /unblacklist <player> <reason>")
                 return@addSyntax
             }
             
-            // Use async permission checking with debug logging
-            LobbyPlugin.logger.info("Checking permissions for ${sender.username}: radium.punish.unban and lobby.admin")
-            
-            plugin.radiumIntegration.hasPermission(sender.uuid, "radium.punish.unban").thenAccept { hasRadiumPerm ->
-                LobbyPlugin.logger.info("${sender.username} - radium.punish.unban: $hasRadiumPerm")
-                
+            // Use async permission checking
+            plugin.radiumIntegration.hasPermission(sender.uuid, "radium.punish.unblacklist").thenAccept { hasRadiumPerm ->
                 plugin.radiumIntegration.hasPermission(sender.uuid, "lobby.admin").thenAccept { hasLobbyAdmin ->
-                    LobbyPlugin.logger.info("${sender.username} - lobby.admin: $hasLobbyAdmin")
-                    
                     if (!hasRadiumPerm && !hasLobbyAdmin) {
                         MessageUtils.sendMessage(sender, "&cYou don't have permission to use this command.")
-                        MessageUtils.sendMessage(sender, "&7Required: radium.punish.unban or lobby.admin")
-                        MessageUtils.sendMessage(sender, "&7Debug: radium.punish.unban=$hasRadiumPerm, lobby.admin=$hasLobbyAdmin")
+                        MessageUtils.sendMessage(sender, "&7Required: radium.punish.unblacklist or lobby.admin")
                         return@thenAccept
                     }
                     
-                    // Execute the command if permission check passes
-                    LobbyPlugin.logger.info("${sender.username} passed permission check, executing unban command")
-                    executeUnbanPunishment(sender, target, reason)
+                    // Execute the punishment revocation using the proper API
+                    executeUnblacklistPunishment(sender, target, reason)
                 }.exceptionally { ex ->
                     MessageUtils.sendMessage(sender, "&cPermission check failed: ${ex.message}")
                     null
@@ -77,17 +69,17 @@ class UnbanCommand(private val plugin: LobbyPlugin) : Command("unban") {
         
         setDefaultExecutor { sender, _ ->
             if (sender is Player) {
-                MessageUtils.sendMessage(sender, "&cUsage: /unban <player> <reason>")
+                MessageUtils.sendMessage(sender, "&cUsage: /unblacklist <player> <reason>")
             }
         }
     }
     
-    private fun executeUnbanPunishment(player: Player, target: String, reason: String) {
+    private fun executeUnblacklistPunishment(player: Player, target: String, reason: String) {
         GlobalScope.launch {
             try {
                 val request = PunishmentRevokeRequest(
                     target = target,
-                    type = "BAN",
+                    type = "BLACKLIST",
                     reason = reason,
                     staffId = player.uuid.toString(),
                     silent = false
@@ -97,17 +89,17 @@ class UnbanCommand(private val plugin: LobbyPlugin) : Command("unban") {
                 
                 val message = if (result.isSuccess) {
                     val response = (result as PunishmentApiResult.Success).response
-                    "&aSuccessfully unbanned ${response.target}: ${response.message}"
+                    "&aSuccessfully removed blacklist for ${response.target}: ${response.message}"
                 } else {
-                    "&cFailed to unban $target: ${result.getErrorMessage()}"
+                    "&cFailed to remove blacklist for $target: ${result.getErrorMessage()}"
                 }
                 
                 MessageUtils.sendMessage(player, message)
-                LobbyPlugin.logger.info("${player.username} attempted to unban $target - Success: ${result.isSuccess}")
+                LobbyPlugin.logger.info("${player.username} attempted to unblacklist $target - Success: ${result.isSuccess}")
                 
             } catch (e: Exception) {
-                MessageUtils.sendMessage(player, "&cAn error occurred while processing the unban: ${e.message}")
-                LobbyPlugin.logger.error("Error processing unban command from ${player.username}", e)
+                MessageUtils.sendMessage(player, "&cAn error occurred while processing the unblacklist: ${e.message}")
+                LobbyPlugin.logger.error("Error processing unblacklist command from ${player.username}", e)
             }
         }
     }

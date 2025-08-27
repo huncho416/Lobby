@@ -92,6 +92,15 @@ class ConfigManager(private val plugin: LobbyPlugin) {
         }
     }
     
+    fun getLong(config: Map<String, Any>, path: String, default: Long = 0L): Long {
+        val value = getNestedValue(config, path)
+        return when (value) {
+            is Long -> value
+            is Number -> value.toLong()
+            else -> default
+        }
+    }
+    
     private fun getNestedValue(config: Map<String, Any>, path: String): Any? {
         val keys = path.split(".")
         var current: Any? = config

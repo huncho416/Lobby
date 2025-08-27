@@ -46,9 +46,6 @@ class VanishEventListener(private val plugin: LobbyPlugin) {
                             }
                         }
                         
-                        // Update scoreboards if needed
-                        refreshScoreboardsForVanishChange(player, isVanished)
-                        
                         plugin.logger.info("Processed vanish event for ${player.username}: $action (vanished: $isVanished)")
                     }
                 }
@@ -70,35 +67,6 @@ class VanishEventListener(private val plugin: LobbyPlugin) {
                     handleVanishEvent(event)
                 }
             }
-        }
-    }
-    
-    /**
-     * Refresh scoreboards when a player's vanish status changes
-     */
-    private fun refreshScoreboardsForVanishChange(player: Player, isVanished: Boolean) {
-        try {
-            if (!isVanished) {
-                // Player became visible - refresh scoreboard for this player
-                plugin.scoreboardManager.addPlayer(player)
-                
-                // Refresh other players' scoreboards to show this player
-                MinecraftServer.getConnectionManager().onlinePlayers.forEach { otherPlayer ->
-                    if (otherPlayer != player) {
-                        // Force refresh the scoreboard to update player counts/lists
-                        plugin.scoreboardManager.updateScoreboard(otherPlayer)
-                    }
-                }
-            } else {
-                // Player became vanished - update scoreboards for visibility
-                MinecraftServer.getConnectionManager().onlinePlayers.forEach { otherPlayer ->
-                    if (otherPlayer != player) {
-                        plugin.scoreboardManager.updateScoreboard(otherPlayer)
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            plugin.logger.warn("Error refreshing scoreboards for vanish change", e)
         }
     }
     

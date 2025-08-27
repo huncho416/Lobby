@@ -19,6 +19,7 @@ class EventManager(private val plugin: LobbyPlugin) {
         joinItemMonitor.startMonitor()
         
         // Player listeners
+        eventHandler.addListener(AsyncPlayerPreLoginListener(plugin))
         eventHandler.addListener(PlayerJoinListener(plugin))
         eventHandler.addListener(PlayerLeaveListener(plugin))
         eventHandler.addListener(PlayerChatListener(plugin))

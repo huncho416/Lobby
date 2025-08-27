@@ -3,6 +3,7 @@ package huncho.main.lobby
 import huncho.main.lobby.config.ConfigManager
 import huncho.main.lobby.api.GamemodeAPI
 import huncho.main.lobby.api.RadiumCommandForwarder
+import huncho.main.lobby.api.RadiumPunishmentAPI
 import huncho.main.lobby.listeners.EventManager
 import huncho.main.lobby.commands.CommandManager
 import huncho.main.lobby.features.queue.QueueManager
@@ -14,8 +15,13 @@ import huncho.main.lobby.features.world.WorldLightingManager
 import huncho.main.lobby.features.tablist.TabListManager
 import huncho.main.lobby.features.vanish.VanishStatusMonitor
 import huncho.main.lobby.features.vanish.VanishEventListener
+import huncho.main.lobby.listeners.VanishPluginMessageListener
 import huncho.main.lobby.managers.SchematicManager
 import huncho.main.lobby.integration.RadiumIntegration
+import huncho.main.lobby.redis.RedisManager
+import huncho.main.lobby.redis.RedisCache
+import huncho.main.lobby.redis.RedisEventListener
+import huncho.main.lobby.services.PunishmentService
 import kotlinx.coroutines.*
 import net.minestom.server.MinecraftServer
 import net.minestom.server.instance.InstanceContainer
@@ -46,6 +52,9 @@ object LobbyPlugin {
     // Radium Command Forwarding
     lateinit var radiumCommandForwarder: RadiumCommandForwarder
     
+    // Radium Punishment API
+    lateinit var radiumPunishmentAPI: RadiumPunishmentAPI
+    
     // Feature Managers
     lateinit var queueManager: QueueManager
     lateinit var scoreboardManager: ScoreboardManager
@@ -56,10 +65,17 @@ object LobbyPlugin {
     lateinit var tabListManager: TabListManager
     lateinit var vanishStatusMonitor: VanishStatusMonitor
     lateinit var vanishEventListener: VanishEventListener
+    lateinit var vanishPluginMessageListener: VanishPluginMessageListener
     lateinit var schematicManager: SchematicManager
     
     // Integration
     lateinit var radiumIntegration: RadiumIntegration
+    
+    // Redis Integration
+    var redisManager: RedisManager? = null
+    var redisCache: RedisCache? = null
+    var redisEventListener: RedisEventListener? = null
+    var punishmentService: PunishmentService? = null
     
     // Lobby Instance
     lateinit var lobbyInstance: InstanceContainer
@@ -104,12 +120,20 @@ object LobbyPlugin {
             // Save all data
             queueManager.saveAllQueues()
             
+            // Shutdown Redis integration
+            redisManager?.shutdown()
+            
             // Shutdown schematic manager
             schematicManager.shutdown()
             
             // Shutdown vanish status monitor
             if (::vanishStatusMonitor.isInitialized) {
                 vanishStatusMonitor.shutdown()
+            }
+            
+            // Clear vanish plugin message listener data
+            if (::vanishPluginMessageListener.isInitialized) {
+                vanishPluginMessageListener.clear()
             }
             
             // Shutdown integrations
@@ -150,6 +174,12 @@ object LobbyPlugin {
         )
         radiumCommandForwarder = RadiumCommandForwarder(radiumApiUrl)
         
+        // Radium punishment API (proper API endpoints)
+        radiumPunishmentAPI = RadiumPunishmentAPI(radiumApiUrl)
+        
+        // Initialize Redis integration
+        initializeRedis()
+        
         // Event and command management
         eventManager = EventManager(this)
         commandManager = CommandManager(this)
@@ -176,14 +206,18 @@ object LobbyPlugin {
         tabListManager = TabListManager(this)
         vanishStatusMonitor = VanishStatusMonitor(this)
         vanishEventListener = VanishEventListener(this)
+        vanishPluginMessageListener = VanishPluginMessageListener(this)
         
         // Initialize the new managers
         worldLightingManager.initialize()
         tabListManager.initialize()
         vanishStatusMonitor.initialize()
         
-        // Register vanish event handlers in visibility manager
+        // Register plugin message listener for hybrid vanish system
         val eventHandler = MinecraftServer.getGlobalEventHandler()
+        eventHandler.addListener(vanishPluginMessageListener)
+        
+        // Register vanish event handlers in visibility manager
         visibilityManager.registerEvents(eventHandler)
         
         // Register all event listeners
@@ -263,6 +297,64 @@ object LobbyPlugin {
         } catch (e: Exception) {
             logger.error("Error during plugin reload", e)
             throw e
+        }
+    }
+    
+    private fun initializeRedis() {
+        logger.info("Initializing Redis integration...")
+        
+        try {
+            // Initialize Redis manager
+            redisManager = RedisManager(this)
+            
+            // Attempt to connect to Redis
+            val isConnected = redisManager!!.initialize().join()
+            
+            if (isConnected) {
+                logger.info("Redis connection established successfully")
+                
+                // Initialize Redis cache
+                redisCache = RedisCache(this, redisManager!!)
+                
+                // Initialize Redis event listener
+                redisEventListener = RedisEventListener(this, redisCache!!)
+                
+                // Set up pub/sub subscriptions
+                val pubSubConnection = redisManager!!.getPubSubConnection()
+                if (pubSubConnection != null) {
+                    pubSubConnection.addListener(redisEventListener!!)
+                    
+                    // Subscribe to punishment and mute update channels
+                    val punishmentChannel = configManager.getString(configManager.mainConfig, "redis.channels.punishment_updates", "radium:punishment:updates")
+                    val muteChannel = configManager.getString(configManager.mainConfig, "redis.channels.mute_updates", "radium:mute:updates")
+                    
+                    pubSubConnection.async().subscribe(punishmentChannel, muteChannel)
+                    logger.info("Subscribed to Redis channels: $punishmentChannel, $muteChannel")
+                }
+                
+                // Initialize punishment service with Redis support
+                punishmentService = PunishmentService(this, radiumIntegration, redisManager!!, redisCache!!)
+                
+                logger.info("Redis integration initialized successfully")
+            } else {
+                logger.warn("Failed to connect to Redis - punishment system will use HTTP API only")
+                
+                // Initialize punishment service without Redis
+                punishmentService = PunishmentService(this, radiumIntegration, 
+                    RedisManager(this), RedisCache(this, RedisManager(this)))
+            }
+            
+        } catch (e: Exception) {
+            logger.error("Error initializing Redis integration", e)
+            logger.warn("Punishment system will use HTTP API only")
+            
+            // Initialize punishment service without Redis in case of error
+            try {
+                punishmentService = PunishmentService(this, radiumIntegration,
+                    RedisManager(this), RedisCache(this, RedisManager(this)))
+            } catch (fallbackError: Exception) {
+                logger.error("Failed to initialize punishment service fallback", fallbackError)
+            }
         }
     }
 }

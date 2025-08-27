@@ -477,20 +477,36 @@ class RadiumIntegration(
         return CompletableFuture.supplyAsync {
             try {
                 val request = buildGetRequest("/api/players/uuid/${playerUuid}/vanish")
+                logger.debug("Checking vanish status for $playerUuid at: $baseUrl/api/players/uuid/${playerUuid}/vanish")
                 httpClient.newCall(request).execute().use { response ->
+                    logger.debug("Vanish API response code: ${response.code}")
                     if (response.isSuccessful) {
-                        val jsonNode = objectMapper.readTree(response.body?.string())
-                        jsonNode.get("vanished")?.asBoolean() ?: false
+                        val responseBody = response.body?.string()
+                        logger.debug("Vanish API response body: $responseBody")
+                        val jsonNode = objectMapper.readTree(responseBody)
+                        
+                        // Parse vanish status from response
+                        val vanishStatus = jsonNode.get("vanished")?.asBoolean() ?: false
+                            
+                        logger.debug("Parsed vanish status for $playerUuid: $vanishStatus")
+                        return@supplyAsync vanishStatus
+                    } else if (response.code == 404) {
+                        // 404 means player is not online on the proxy, so they can't be vanished
+                        logger.debug("Player $playerUuid not found on proxy (404) - treating as not vanished")
+                        return@supplyAsync false
                     } else {
-                        false
+                        val errorBody = response.body?.string() ?: "No body"
+                        logger.warn("Failed to check vanish status for $playerUuid: HTTP ${response.code} - $errorBody")
+                        return@supplyAsync false
                     }
                 }
             } catch (e: Exception) {
                 logger.warn("Failed to check vanish status for $playerUuid", e)
-                false
+                return@supplyAsync false
             }
         }
     }
+
 
     /**
      * Check if a viewer can see a vanished player
@@ -499,17 +515,32 @@ class RadiumIntegration(
         return CompletableFuture.supplyAsync {
             try {
                 val request = buildGetRequest("/api/players/uuid/${viewerUuid}/can-see-vanished/${vanishedPlayerUuid}")
+                logger.debug("Checking vanish visibility for viewer $viewerUuid -> target $vanishedPlayerUuid")
                 httpClient.newCall(request).execute().use { response ->
+                    logger.debug("Vanish visibility API response code: ${response.code}")
                     if (response.isSuccessful) {
-                        val jsonNode = objectMapper.readTree(response.body?.string())
-                        jsonNode.get("canSee")?.asBoolean() ?: false
+                        val responseBody = response.body?.string()
+                        logger.debug("Vanish visibility API response body: $responseBody")
+                        val jsonNode = objectMapper.readTree(responseBody)
+                        
+                        // Parse visibility result from response
+                        val canSee = jsonNode.get("canSee")?.asBoolean() ?: false
+                            
+                        logger.debug("Parsed visibility result for $viewerUuid -> $vanishedPlayerUuid: $canSee")
+                        return@supplyAsync canSee
+                    } else if (response.code == 404) {
+                        // 404 means one or both players are not online on the proxy
+                        logger.debug("Player not found on proxy (404) for visibility check $viewerUuid -> $vanishedPlayerUuid - defaulting to false")
+                        return@supplyAsync false
                     } else {
-                        false
+                        val errorBody = response.body?.string() ?: "No body"
+                        logger.warn("Failed to check vanish visibility for $viewerUuid -> $vanishedPlayerUuid: HTTP ${response.code} - $errorBody")
+                        return@supplyAsync false
                     }
                 }
             } catch (e: Exception) {
                 logger.warn("Failed to check vanish visibility for $viewerUuid -> $vanishedPlayerUuid", e)
-                false
+                return@supplyAsync false
             }
         }
     }
@@ -640,4 +671,13 @@ class RadiumIntegration(
         val playerCount: Int,
         val isOnline: Boolean
     )
+
+    /**
+     * Make a GET request to the Radium API
+     * This method is exposed for use by other services like PunishmentService
+     */
+    fun makeApiRequest(endpoint: String): Response {
+        val request = buildGetRequest(endpoint)
+        return httpClient.newCall(request).execute()
+    }
 }

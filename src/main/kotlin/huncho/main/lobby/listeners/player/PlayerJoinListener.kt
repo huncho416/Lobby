@@ -3,6 +3,8 @@ package huncho.main.lobby.listeners.player
 import huncho.main.lobby.LobbyPlugin
 import huncho.main.lobby.utils.MessageUtils
 import huncho.main.lobby.utils.JoinItemsUtil
+import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.format.NamedTextColor
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.GameMode
 import net.minestom.server.entity.Player
@@ -28,6 +30,23 @@ class PlayerJoinListener(private val plugin: LobbyPlugin) : EventListener<Player
     
     private suspend fun handlePlayerJoin(player: Player) {
         try {
+            // Check if player is banned as a fallback (in case pre-login check missed it)
+            val punishmentService = plugin.punishmentService
+            if (punishmentService != null) {
+                val isBanned = punishmentService.isPlayerBanned(player.uuid).join()
+                if (isBanned) {
+                    val punishment = punishmentService.getActivePunishment(player.uuid).join()
+                    val banReason = if (punishment != null) {
+                        "You are banned: ${punishment.getDisplayReason()}"
+                    } else {
+                        "You are banned from this server!"
+                    }
+                    player.kick(Component.text(banReason, NamedTextColor.RED))
+                    LobbyPlugin.logger.info("Kicked banned player ${player.username} (${player.uuid}) on join")
+                    return
+                }
+            }
+            
             // Sync with Radium
             plugin.radiumIntegration.syncPlayerOnJoin(player)
             

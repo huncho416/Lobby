@@ -1,6 +1,8 @@
 package huncho.main.lobby.commands.impl
 
 import huncho.main.lobby.LobbyPlugin
+import huncho.main.lobby.api.PunishmentApiResult
+import huncho.main.lobby.models.PunishmentRequest
 import huncho.main.lobby.utils.MessageUtils
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
@@ -15,7 +17,7 @@ class TempBanCommand(private val plugin: LobbyPlugin) : Command("tempban") {
         setCondition { sender, _ ->
             when (sender) {
                 is Player -> try {
-                    plugin.radiumIntegration.hasPermission(sender.uuid, "radium.command.tempban").get() ||
+                    plugin.radiumIntegration.hasPermission(sender.uuid, "radium.punish.ban").get() ||
                     plugin.radiumIntegration.hasPermission(sender.uuid, "lobby.admin").get()
                 } catch (e: Exception) {
                     false
@@ -47,16 +49,16 @@ class TempBanCommand(private val plugin: LobbyPlugin) : Command("tempban") {
             }
             
             // Use async permission checking
-            plugin.radiumIntegration.hasPermission(sender.uuid, "radium.command.tempban").thenAccept { hasRadiumPerm ->
+            plugin.radiumIntegration.hasPermission(sender.uuid, "radium.punish.ban").thenAccept { hasRadiumPerm ->
                 plugin.radiumIntegration.hasPermission(sender.uuid, "lobby.admin").thenAccept { hasLobbyAdmin ->
                     if (!hasRadiumPerm && !hasLobbyAdmin) {
                         MessageUtils.sendMessage(sender, "&cYou don't have permission to use this command.")
-                        MessageUtils.sendMessage(sender, "&7Required: radium.command.tempban or lobby.admin")
+                        MessageUtils.sendMessage(sender, "&7Required: radium.punish.ban or lobby.admin")
                         return@thenAccept
                     }
                     
-                    // Execute the command if permission check passes
-                    executeRadiumCommand(sender, "tempban $target $duration $reason")
+                    // Execute the punishment using the proper API
+                    executeTempBanPunishment(sender, target, duration, reason)
                 }.exceptionally { ex ->
                     MessageUtils.sendMessage(sender, "&cPermission check failed: ${ex.message}")
                     null
@@ -76,19 +78,36 @@ class TempBanCommand(private val plugin: LobbyPlugin) : Command("tempban") {
         }
     }
     
-    private fun executeRadiumCommand(player: Player, command: String) {
+    private fun executeTempBanPunishment(player: Player, target: String, duration: String, reason: String) {
         GlobalScope.launch {
-            val result = plugin.radiumCommandForwarder.executeCommand(player.username, command)
-            
-            // Send feedback to the player based on success/failure
-            val message = if (result.success) {
-                "&a${result.message}"
-            } else {
-                "&c${result.message}"
+            try {
+                val request = PunishmentRequest(
+                    target = target,
+                    type = "BAN", // Radium uses BAN with duration for temporary bans
+                    reason = reason,
+                    staffId = player.uuid.toString(),
+                    duration = duration,
+                    silent = false,
+                    clearInventory = false,
+                    priority = PunishmentRequest.Priority.NORMAL
+                )
+                
+                val result = plugin.radiumPunishmentAPI.issuePunishment(request)
+                
+                val message = if (result.isSuccess) {
+                    val response = (result as PunishmentApiResult.Success).response
+                    "&aSuccessfully banned ${response.target} for $duration: ${response.message}"
+                } else {
+                    "&cFailed to ban $target: ${result.getErrorMessage()}"
+                }
+                
+                MessageUtils.sendMessage(player, message)
+                LobbyPlugin.logger.info("${player.username} attempted to tempban $target for $duration - Success: ${result.isSuccess}")
+                
+            } catch (e: Exception) {
+                MessageUtils.sendMessage(player, "&cAn error occurred while processing the ban: ${e.message}")
+                LobbyPlugin.logger.error("Error processing tempban command from ${player.username}", e)
             }
-            
-            MessageUtils.sendMessage(player, message)
-            LobbyPlugin.logger.info("${player.username} executed: $command - Success: ${result.success}")
         }
     }
 }

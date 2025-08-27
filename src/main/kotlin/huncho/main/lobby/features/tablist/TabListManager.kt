@@ -104,16 +104,16 @@ class TabListManager(private val plugin: LobbyPlugin) {
         
         MinecraftServer.getConnectionManager().onlinePlayers.forEach { targetPlayer ->
             try {
-                // Check if target player is vanished
+                // Check if target player is vanished using hybrid system
                 val isVanished = if (respectVanish) {
-                    plugin.radiumIntegration.isPlayerVanished(targetPlayer.uuid).join()
+                    plugin.vanishPluginMessageListener.isPlayerVanished(targetPlayer.uuid)
                 } else {
                     false
                 }
                 
                 if (isVanished && respectVanish) {
-                    // Check if viewer can see vanished player
-                    val canSee = plugin.radiumIntegration.canSeeVanishedPlayer(viewer.uuid, targetPlayer.uuid).join()
+                    // Check if viewer can see vanished player using hybrid system
+                    val canSee = plugin.vanishPluginMessageListener.canSeeVanished(viewer, targetPlayer.uuid)
                     if (!canSee) {
                         // Hide this player from viewer's tab list
                         // Note: In Minestom, we might need to use different methods to hide players

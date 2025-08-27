@@ -205,10 +205,11 @@ class VisibilityManager(private val plugin: LobbyPlugin) {
     
     /**
      * Update player visibility based on vanish status - CRITICAL for in-game vanish
+     * Now uses the hybrid vanish system with plugin message listener
      */
     suspend fun updatePlayerVisibilityForVanish(player: Player) {
         try {
-            val isVanished = plugin.radiumIntegration.isPlayerVanished(player.uuid).join()
+            val isVanished = plugin.vanishPluginMessageListener.isPlayerVanished(player.uuid)
             
             // Get all players in the same instance
             val allPlayers = player.instance?.players ?: emptySet()
@@ -216,7 +217,7 @@ class VisibilityManager(private val plugin: LobbyPlugin) {
             for (otherPlayer in allPlayers) {
                 if (otherPlayer.uuid != player.uuid) {
                     if (isVanished) {
-                        val canSee = plugin.radiumIntegration.canSeeVanishedPlayer(otherPlayer.uuid, player.uuid).join()
+                        val canSee = plugin.vanishPluginMessageListener.canSeeVanished(otherPlayer, player.uuid)
                         if (!canSee) {
                             // Hide vanished player from viewers who can't see them
                             hidePlayerFromViewer(otherPlayer, player)
