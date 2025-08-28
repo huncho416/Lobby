@@ -7,6 +7,7 @@ import net.minestom.server.timer.TaskSchedule
 import net.minestom.server.MinecraftServer
 import net.kyori.adventure.text.Component
 import kotlinx.coroutines.runBlocking
+import java.util.*
 
 /**
  * Manages tab list formatting with MythicHub style while respecting Radium prefixes
@@ -19,7 +20,7 @@ class TabListManager(private val plugin: LobbyPlugin) {
         }
         
         startTabListUpdateTask()
-        plugin.logger.info("Tab list manager initialized - MythicHub style with Radium integration")
+        plugin.logger.info("Tab list manager initialized")
     }
     
     /**
@@ -115,8 +116,7 @@ class TabListManager(private val plugin: LobbyPlugin) {
                     // Check if viewer can see vanished player using hybrid system
                     val canSee = plugin.vanishPluginMessageListener.canSeeVanished(viewer, targetPlayer.uuid)
                     if (!canSee) {
-                        // Hide this player from viewer's tab list by removing them
-                        targetPlayer.removeViewer(viewer)
+                        // Skip updating display for hidden players - Radium will handle visibility
                         return@forEach
                     }
                 }
@@ -130,8 +130,8 @@ class TabListManager(private val plugin: LobbyPlugin) {
                     
                     if (radiumData != null && radiumData.rank != null) {
                         // Radium provides formatting, construct the display name with proper color parsing
-                        val prefix = parseColorCodes(radiumData.rank.prefix.ifEmpty { "" })
-                        val color = parseColorCodes(radiumData.rank.color.ifEmpty { "&7" })
+                        val prefix = parseColorCodes(radiumData.rank.prefix)
+                        val color = parseColorCodes(radiumData.rank.color)
                         
                         // FIXED: Add [V] vanish indicator with proper formatting
                         val vanishIndicator = if (isVanished && showVanishIndicator) "&8[V] &r" else ""
@@ -185,7 +185,7 @@ class TabListManager(private val plugin: LobbyPlugin) {
     /**
      * Conservative method to update player display names - only when absolutely sure Radium isn't handling it
      */
-    private suspend fun updatePlayerDisplayNamesConservatively(viewer: Player) {
+    private suspend fun updatePlayerDisplayNamesConservatively(@Suppress("UNUSED_PARAMETER") viewer: Player) {
         // We'll only apply formatting to players who definitely don't have Radium data
         // This prevents any conflicts with Radium's formatting
         val showVanishIndicator = plugin.configManager.getBoolean(plugin.configManager.mainConfig, "tablist.show_vanish_indicator", true)
@@ -363,11 +363,6 @@ class TabListManager(private val plugin: LobbyPlugin) {
      */
     suspend fun showPlayerInTab(targetPlayer: Player, viewer: Player) {
         try {
-            // Ensure player is visible to this viewer
-            if (!targetPlayer.viewers.contains(viewer)) {
-                targetPlayer.addViewer(viewer)
-            }
-            
             // Update display name without vanish indicator
             updatePlayerDisplayForViewer(targetPlayer, viewer, false)
             plugin.logger.debug("✅ Showing unvanished ${targetPlayer.username} normally to ${viewer.username}")
@@ -393,11 +388,6 @@ class TabListManager(private val plugin: LobbyPlugin) {
     fun showPlayerWithVanishIndicator(vanishedPlayer: Player, viewer: Player) {
         runBlocking {
             try {
-                // Ensure player is visible to this viewer
-                if (!vanishedPlayer.viewers.contains(viewer)) {
-                    vanishedPlayer.addViewer(viewer)
-                }
-                
                 // Update display name with vanish indicator
                 updatePlayerDisplayForViewer(vanishedPlayer, viewer, true)
                 plugin.logger.debug("✅ Showing vanished ${vanishedPlayer.username} with [V] indicator to ${viewer.username}")
@@ -412,10 +402,9 @@ class TabListManager(private val plugin: LobbyPlugin) {
      */
     fun hidePlayerFromTab(player: Player, viewer: Player) {
         try {
-            if (player.viewers.contains(viewer)) {
-                player.removeViewer(viewer)
-                plugin.logger.debug("❌ Hidden ${player.username} from ${viewer.username}'s tab")
-            }
+            // For tab list hiding, we can't easily remove players from tab completely
+            // Instead, we'll just ensure they don't have special formatting
+            plugin.logger.debug("❌ Would hide ${player.username} from ${viewer.username}'s tab (display name managed by Radium)")
         } catch (e: Exception) {
             plugin.logger.warn("Failed to hide ${player.username} from ${viewer.username}'s tab", e)
         }
@@ -434,8 +423,8 @@ class TabListManager(private val plugin: LobbyPlugin) {
                 val radiumData = plugin.radiumIntegration.getPlayerData(player.uuid).join()
                 
                 if (radiumData != null && radiumData.rank != null) {
-                    val prefix = parseColorCodes(radiumData.rank.prefix.ifEmpty { "" })
-                    val color = parseColorCodes(radiumData.rank.color.ifEmpty { "&7" })
+                    val prefix = parseColorCodes(radiumData.rank.prefix)
+                    val color = parseColorCodes(radiumData.rank.color)
                     
                     val vanishIndicator = if (showVanishIndicator && showIndicator) "&8[V] &r" else ""
                     val displayName = "$vanishIndicator$prefix$color${player.username}"
@@ -443,6 +432,48 @@ class TabListManager(private val plugin: LobbyPlugin) {
                     player.displayName = MessageUtils.colorize(displayName)
                     plugin.logger.debug("Updated Radium display for ${player.username} (vanish: $showVanishIndicator): $displayName")
                     return
+                }
+            }
+            
+            // Fallback formatting
+            val fallbackFormat = plugin.configManager.getString(plugin.configManager.mainConfig, "tablist.fallback_format", "&7%player_name%")
+            val vanishIndicator = if (showVanishIndicator && showIndicator) "&8[V] &r" else ""
+            val displayName = "$vanishIndicator${fallbackFormat.replace("%player_name%", player.username)}"
+            
+            player.displayName = MessageUtils.colorize(displayName)
+            plugin.logger.debug("Updated fallback display for ${player.username} (vanish: $showVanishIndicator): $displayName")
+            
+        } catch (e: Exception) {
+            plugin.logger.warn("Failed to update display name for ${player.username} for viewer ${viewer.username}", e)
+        }
+    }
+    
+    /**
+     * ENHANCED: Update player display name for specific viewer with vanish indicator option (synchronous version)
+     */
+    private fun updatePlayerDisplayForViewerSync(player: Player, viewer: Player, showVanishIndicator: Boolean) {
+        try {
+            val respectRadium = plugin.configManager.getBoolean(plugin.configManager.mainConfig, "tablist.respect_radium_formatting", true)
+            val showIndicator = plugin.configManager.getBoolean(plugin.configManager.mainConfig, "tablist.show_vanish_indicator", true)
+            
+            if (respectRadium) {
+                // Get Radium formatting for this player (non-blocking)
+                try {
+                    val radiumData = plugin.radiumIntegration.getPlayerData(player.uuid).join()
+                    
+                    if (radiumData != null && radiumData.rank != null) {
+                        val prefix = parseColorCodes(radiumData.rank.prefix)
+                        val color = parseColorCodes(radiumData.rank.color)
+                        
+                        val vanishIndicator = if (showVanishIndicator && showIndicator) "&8[V] &r" else ""
+                        val displayName = "$vanishIndicator$prefix$color${player.username}"
+                        
+                        player.displayName = MessageUtils.colorize(displayName)
+                        plugin.logger.debug("Updated Radium display for ${player.username} (vanish: $showVanishIndicator): $displayName")
+                        return
+                    }
+                } catch (e: Exception) {
+                    plugin.logger.debug("Could not get Radium data for ${player.username}, using fallback")
                 }
             }
             
@@ -468,5 +499,100 @@ class TabListManager(private val plugin: LobbyPlugin) {
             "respect_radium" to plugin.configManager.getBoolean(plugin.configManager.mainConfig, "tablist.respect_radium_formatting", true),
             "online_players" to MinecraftServer.getConnectionManager().onlinePlayerCount
         )
+    }
+    
+    /**
+     * CRITICAL FIX: Force refresh player tab entry by updating display names
+     * Fixes the unvanish issue where names don't reappear in tab list
+     */
+    fun forcePlayerTabRefresh(player: Player) {
+        try {
+            // Check if player is vanished
+            val isVanished = plugin.vanishPluginMessageListener.isPlayerVanished(player.uuid)
+            
+            // Update display name for all viewers
+            MinecraftServer.getConnectionManager().onlinePlayers.forEach { viewer ->
+                if (viewer.uuid != player.uuid) {
+                    // Use runBlocking for the suspend call or make it non-blocking
+                    val canSee = if (isVanished) {
+                        try {
+                            runBlocking { plugin.vanishPluginMessageListener.canSeeVanished(viewer, player.uuid) }
+                        } catch (e: Exception) {
+                            false
+                        }
+                    } else {
+                        true
+                    }
+                    
+                    if (canSee) {
+                        // Update display name with proper formatting (non-blocking)
+                        updatePlayerDisplayForViewerSync(player, viewer, isVanished)
+                        plugin.logger.debug("✅ Refreshed tab entry for ${player.username} → ${viewer.username}")
+                    }
+                }
+            }
+            
+            // Also update the player's own tab list
+            updatePlayerTabList(player)
+            
+        } catch (e: Exception) {
+            plugin.logger.warn("Failed to refresh tab entries for ${player.username}", e)
+        }
+    }
+    
+    /**
+     * CRITICAL FIX: Get formatted display name with proper tab formatting
+     * Handles vanish indicators and rank-specific formatting
+     */
+    private fun getFormattedDisplayName(player: Player, viewer: Player, isVanished: Boolean): Component {
+        try {
+            val radiumData = plugin.radiumIntegration.getPlayerData(player.uuid).join()
+            
+            if (radiumData?.rank != null) {
+                // Use available rank data (prefix and color)
+                val prefix = radiumData.rank.prefix
+                val nameColor = radiumData.rank.color
+                
+                // Parse color codes properly
+                val parsedPrefix = parseColorCodesFixed(prefix)
+                val parsedColor = parseColorCodesFixed(nameColor)
+                
+                // Add vanish indicator if needed
+                val vanishIndicator = if (isVanished && canSeeVanishedIndicator(viewer, player.uuid)) {
+                    "&8[V] &r"
+                } else ""
+                
+                val fullName = "$vanishIndicator$parsedPrefix$parsedColor${player.username}"
+                return MessageUtils.colorize(fullName)
+            }
+        } catch (e: Exception) {
+            plugin.logger.warn("Failed to get formatted display name for ${player.username}", e)
+        }
+        
+        // Fallback for players without Radium data
+        val vanishIndicator = if (isVanished && canSeeVanishedIndicator(viewer, player.uuid)) {
+            "&8[V] &7"
+        } else "&7"
+        
+        return MessageUtils.colorize("$vanishIndicator${player.username}")
+    }
+    
+    /**
+     * Check if viewer can see vanish indicator for this player
+     */
+    private fun canSeeVanishedIndicator(viewer: Player, vanishedPlayerUuid: UUID): Boolean {
+        return try {
+            runBlocking { plugin.vanishPluginMessageListener.canSeeVanished(viewer, vanishedPlayerUuid) }
+        } catch (e: Exception) {
+            false
+        }
+    }
+    
+    /**
+     * CRITICAL FIX: Proper color code parsing with escaped ampersand handling
+     */
+    private fun parseColorCodesFixed(input: String): String {
+        return input.replace("&", "§")
+            .replace("§§", "&") // Handle escaped ampersands
     }
 }
