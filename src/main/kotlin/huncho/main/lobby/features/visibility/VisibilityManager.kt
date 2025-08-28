@@ -1,6 +1,7 @@
 package huncho.main.lobby.features.visibility
 
 import huncho.main.lobby.LobbyPlugin
+import huncho.main.lobby.models.VanishLevel
 import huncho.main.lobby.utils.MessageUtils
 import net.minestom.server.entity.Player
 import net.minestom.server.MinecraftServer
@@ -345,6 +346,100 @@ class VisibilityManager(private val plugin: LobbyPlugin) {
         }
     }
 
+    /**
+     * ENHANCED: Weight-based vanish visibility checking
+     * Integrates with Radium's rank weight system for proper vanish levels
+     */
+    suspend fun canPlayerSeeVanished(viewer: Player, vanishedPlayerUuid: UUID): Boolean {
+        try {
+            val vanishData = plugin.vanishPluginMessageListener.getVanishData(vanishedPlayerUuid) ?: return true
+            
+            // Get viewer's rank data from Radium
+            val viewerData = plugin.radiumIntegration.getPlayerData(viewer.uuid).join()
+            val viewerWeight = viewerData?.rank?.weight ?: 0
+            
+            // Check if viewer has override permission first
+            val hasOverridePermission = plugin.radiumIntegration.hasPermission(viewer.uuid, "radium.vanish.see").join()
+            if (hasOverridePermission) {
+                plugin.logger.debug("${viewer.username} can see vanished player due to override permission")
+                return true
+            }
+            
+            // CRITICAL: Weight-based visibility checking (matching Radium's system)
+            val canSeeBasedOnWeight = when (vanishData.level) {
+                VanishLevel.HELPER -> viewerWeight >= 25      // Helper+ can see Helper vanish
+                VanishLevel.MODERATOR -> viewerWeight >= 50   // Moderator+ can see Moderator vanish
+                VanishLevel.ADMIN -> viewerWeight >= 75       // Admin+ can see Admin vanish  
+                VanishLevel.OWNER -> viewerWeight >= 100      // Owner+ can see Owner vanish
+            }
+            
+            plugin.logger.debug("Weight-based vanish check: ${viewer.username} (weight: $viewerWeight) vs ${vanishData.level} level - can see: $canSeeBasedOnWeight")
+            return canSeeBasedOnWeight
+            
+        } catch (e: Exception) {
+            plugin.logger.warn("Error checking vanish visibility for ${viewer.username}", e)
+            return false // Default to not showing vanished players on error
+        }
+    }
+    
+    /**
+     * ENHANCED: Comprehensive player join visibility update
+     * Ensures new players see correct vanish states and are seen correctly
+     */
+    suspend fun handlePlayerJoinVisibility(newPlayer: Player) {
+        try {
+            plugin.logger.debug("Handling join visibility for ${newPlayer.username}")
+            
+            // Check if the new player is vanished
+            val newPlayerVanished = plugin.vanishPluginMessageListener.isPlayerVanished(newPlayer.uuid)
+            
+            // Update visibility for all existing players
+            MinecraftServer.getConnectionManager().onlinePlayers.forEach { existingPlayer ->
+                if (existingPlayer.uuid != newPlayer.uuid) {
+                    
+                    // 1. Check if existing player can see the new player
+                    if (newPlayerVanished) {
+                        val canSeeNewPlayer = canPlayerSeeVanished(existingPlayer, newPlayer.uuid)
+                        if (canSeeNewPlayer) {
+                            showPlayerToViewer(existingPlayer, newPlayer)
+                            plugin.tabListManager.showPlayerWithVanishIndicator(newPlayer, existingPlayer)
+                        } else {
+                            hidePlayerFromViewer(existingPlayer, newPlayer)
+                            plugin.tabListManager.hidePlayerFromTab(newPlayer, existingPlayer)
+                        }
+                    } else {
+                        showPlayerToViewer(existingPlayer, newPlayer)
+                        plugin.tabListManager.showPlayerInTab(newPlayer, existingPlayer)
+                    }
+                    
+                    // 2. Check if new player can see the existing player
+                    val existingPlayerVanished = plugin.vanishPluginMessageListener.isPlayerVanished(existingPlayer.uuid)
+                    if (existingPlayerVanished) {
+                        val canSeeExistingPlayer = canPlayerSeeVanished(newPlayer, existingPlayer.uuid)
+                        if (canSeeExistingPlayer) {
+                            showPlayerToViewer(newPlayer, existingPlayer)
+                            plugin.tabListManager.showPlayerWithVanishIndicator(existingPlayer, newPlayer)
+                        } else {
+                            hidePlayerFromViewer(newPlayer, existingPlayer)
+                            plugin.tabListManager.hidePlayerFromTab(existingPlayer, newPlayer)
+                        }
+                    } else {
+                        showPlayerToViewer(newPlayer, existingPlayer)
+                        plugin.tabListManager.showPlayerInTab(existingPlayer, newPlayer)
+                    }
+                }
+            }
+            
+            // CRITICAL: Update tab lists after visibility changes
+            plugin.tabListManager.refreshAllTabLists()
+            
+            plugin.logger.debug("✅ Completed join visibility update for ${newPlayer.username}")
+            
+        } catch (e: Exception) {
+            plugin.logger.error("Error handling player join visibility for ${newPlayer.username}", e)
+        }
+    }
+    
     /**
      * Check if viewer can see target
      */

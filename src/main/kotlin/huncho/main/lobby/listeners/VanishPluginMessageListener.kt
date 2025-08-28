@@ -93,7 +93,7 @@ class VanishPluginMessageListener(private val plugin: LobbyPlugin) : EventListen
                 plugin.logger.info("Player $playerUuid unvanished")
             }
             
-            // CRITICAL: Update entity visibility immediately for all players
+            // CRITICAL: Update entity visibility immediately for all players  
             updatePlayerVisibilityComprehensive(playerUuid)
             
         } catch (e: Exception) {
@@ -199,6 +199,7 @@ class VanishPluginMessageListener(private val plugin: LobbyPlugin) : EventListen
     
     /**
      * ENHANCED: Comprehensive visibility update for critical vanish functionality
+     * Fixes the core issue where unvanished players don't reappear properly
      */
     private fun updatePlayerVisibilityComprehensive(changedPlayerUuid: UUID) {
         runBlocking {
@@ -207,39 +208,49 @@ class VanishPluginMessageListener(private val plugin: LobbyPlugin) : EventListen
             
             plugin.logger.debug("Comprehensive visibility update for ${changedPlayer?.username ?: changedPlayerUuid} (vanished: $isVanished)")
             
-            // Update visibility for ALL online players
-            MinecraftServer.getConnectionManager().onlinePlayers.forEach { viewer ->
-                if (viewer.uuid != changedPlayerUuid && changedPlayer != null) {
-                    // Update how viewer sees the changed player
-                    if (isVanished) {
-                        val canSee = canSeeVanished(viewer, changedPlayerUuid)
-                        if (canSee) {
-                            // Show vanished player to authorized viewers (staff)
-                            showPlayerToViewer(viewer, changedPlayer)
-                        } else {
-                            // Hide vanished player from unauthorized viewers (defaults)
-                            hidePlayerFromViewer(viewer, changedPlayer)
-                        }
-                    } else {
-                        // Player is not vanished - ensure visible to everyone
-                        showPlayerToViewer(viewer, changedPlayer)
-                    }
-                }
-                
-                // Update viewer's tab list
-                plugin.tabListManager.updatePlayerTabList(viewer)
-            }
-            
-            // Update the changed player's own visibility and tab
             if (changedPlayer != null) {
+                // CRITICAL: Update visibility for all online players regarding this player
+                updatePlayerVisibilityForAllViewers(changedPlayer, isVanished)
+                
+                // Update the changed player's own visibility and tab
                 plugin.visibilityManager.updatePlayerVisibilityForVanish(changedPlayer)
-                plugin.tabListManager.updatePlayerTabList(changedPlayer)
             }
             
-            // Force complete refresh to ensure consistency
+            // CRITICAL: Force complete refresh to ensure consistency
             plugin.tabListManager.refreshAllTabLists()
             
-            plugin.logger.info("Completed comprehensive visibility update for ${changedPlayer?.username ?: changedPlayerUuid}")
+            plugin.logger.info("✅ Completed comprehensive visibility update for ${changedPlayer?.username ?: changedPlayerUuid}")
+        }
+    }
+    
+    /**
+     * ENHANCED: Update visibility for all viewers regarding a specific player
+     * Ensures proper entity visibility and tab list entries
+     */
+    private suspend fun updatePlayerVisibilityForAllViewers(targetPlayer: Player, isVanished: Boolean) {
+        MinecraftServer.getConnectionManager().onlinePlayers.forEach { viewer ->
+            if (viewer.uuid != targetPlayer.uuid) {
+                if (isVanished) {
+                    // Player is vanished - check if viewer can see them
+                    val canSee = canSeeVanished(viewer, targetPlayer.uuid)
+                    if (canSee) {
+                        // Show vanished player to authorized viewers (staff) with [V] indicator
+                        showPlayerToViewer(viewer, targetPlayer)
+                        plugin.tabListManager.showPlayerWithVanishIndicator(targetPlayer, viewer)
+                        plugin.logger.debug("✅ Showing vanished ${targetPlayer.username} to authorized ${viewer.username}")
+                    } else {
+                        // Hide vanished player from unauthorized viewers (defaults)
+                        hidePlayerFromViewer(viewer, targetPlayer)
+                        plugin.tabListManager.hidePlayerFromTab(targetPlayer, viewer)
+                        plugin.logger.debug("❌ Hiding vanished ${targetPlayer.username} from ${viewer.username}")
+                    }
+                } else {
+                    // Player is not vanished - ensure visible to everyone
+                    showPlayerToViewer(viewer, targetPlayer)
+                    plugin.tabListManager.showPlayerInTab(targetPlayer, viewer)
+                    plugin.logger.debug("✅ Showing unvanished ${targetPlayer.username} to ${viewer.username}")
+                }
+            }
         }
     }
     

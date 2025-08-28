@@ -288,14 +288,175 @@ class TabListManager(private val plugin: LobbyPlugin) {
     }
     
     /**
-     * Force refresh all tab lists for all players
-     * Useful after major vanish state changes or system updates
+     * ENHANCED: Comprehensive tab list refresh for all players
+     * Fixes the unvanish visibility issue by properly updating all tab entries
      */
     fun refreshAllTabLists() {
-        MinecraftServer.getConnectionManager().onlinePlayers.forEach { player ->
-            updatePlayerTabList(player)
+        try {
+            val onlinePlayers = MinecraftServer.getConnectionManager().onlinePlayers
+            plugin.logger.debug("Starting comprehensive tab list refresh for ${onlinePlayers.size} players")
+            
+            // First pass: Update all player entries
+            onlinePlayers.forEach { player ->
+                updatePlayerTabEntry(player)
+            }
+            
+            // Second pass: Update headers and footers for all players
+            onlinePlayers.forEach { player ->
+                updatePlayerTabList(player)
+            }
+            
+            plugin.logger.debug("Completed comprehensive tab list refresh for all players")
+        } catch (e: Exception) {
+            plugin.logger.error("Error during comprehensive tab list refresh", e)
         }
-        plugin.logger.debug("Refreshed tab lists for all ${MinecraftServer.getConnectionManager().onlinePlayerCount} players")
+    }
+    
+    /**
+     * ENHANCED: Update individual player tab entry with comprehensive vanish checking
+     * Ensures proper visibility and formatting for each player
+     */
+    private fun updatePlayerTabEntry(player: Player) {
+        runBlocking {
+            try {
+                // Check vanish status first
+                val isVanished = plugin.vanishPluginMessageListener.isPlayerVanished(player.uuid)
+                
+                if (isVanished) {
+                    // Player is vanished - check who can see them
+                    hideOrShowVanishedPlayer(player)
+                } else {
+                    // Player is not vanished - show to everyone with proper formatting
+                    showPlayerInTabForAll(player)
+                }
+                
+                // Update the player's own tab list
+                updatePlayerTabList(player)
+                
+            } catch (e: Exception) {
+                plugin.logger.warn("Error updating tab entry for ${player.username}", e)
+            }
+        }
+    }
+    
+    /**
+     * ENHANCED: Handle vanished player visibility in tab list
+     * Checks each viewer's permission to see the vanished player
+     */
+    private suspend fun hideOrShowVanishedPlayer(vanishedPlayer: Player) {
+        MinecraftServer.getConnectionManager().onlinePlayers.forEach { viewer ->
+            if (viewer.uuid != vanishedPlayer.uuid) {
+                val canSee = plugin.vanishPluginMessageListener.canSeeVanished(viewer, vanishedPlayer.uuid)
+                if (canSee) {
+                    // Show with vanish indicator
+                    showPlayerWithVanishIndicator(vanishedPlayer, viewer)
+                } else {
+                    // Hide from tab completely
+                    hidePlayerFromTab(vanishedPlayer, viewer)
+                }
+            }
+        }
+    }
+    
+    /**
+     * ENHANCED: Show player in tab list normally (for unvanished players) 
+     */
+    suspend fun showPlayerInTab(targetPlayer: Player, viewer: Player) {
+        try {
+            // Ensure player is visible to this viewer
+            if (!targetPlayer.viewers.contains(viewer)) {
+                targetPlayer.addViewer(viewer)
+            }
+            
+            // Update display name without vanish indicator
+            updatePlayerDisplayForViewer(targetPlayer, viewer, false)
+            plugin.logger.debug("✅ Showing unvanished ${targetPlayer.username} normally to ${viewer.username}")
+        } catch (e: Exception) {
+            plugin.logger.warn("Failed to show ${targetPlayer.username} to ${viewer.username}", e)
+        }
+    }
+    
+    /**
+     * Show player in tab for all viewers (helper method)
+     */
+    private suspend fun showPlayerInTabForAll(player: Player) {
+        MinecraftServer.getConnectionManager().onlinePlayers.forEach { viewer ->
+            if (viewer.uuid != player.uuid) {
+                showPlayerInTab(player, viewer)
+            }
+        }
+    }
+    
+    /**
+     * ENHANCED: Show vanished player with [V] indicator to authorized viewers
+     */
+    fun showPlayerWithVanishIndicator(vanishedPlayer: Player, viewer: Player) {
+        runBlocking {
+            try {
+                // Ensure player is visible to this viewer
+                if (!vanishedPlayer.viewers.contains(viewer)) {
+                    vanishedPlayer.addViewer(viewer)
+                }
+                
+                // Update display name with vanish indicator
+                updatePlayerDisplayForViewer(vanishedPlayer, viewer, true)
+                plugin.logger.debug("✅ Showing vanished ${vanishedPlayer.username} with [V] indicator to ${viewer.username}")
+            } catch (e: Exception) {
+                plugin.logger.warn("Failed to show vanished player ${vanishedPlayer.username} to ${viewer.username}", e)
+            }
+        }
+    }
+    
+    /**
+     * ENHANCED: Hide player from specific viewer's tab list
+     */
+    fun hidePlayerFromTab(player: Player, viewer: Player) {
+        try {
+            if (player.viewers.contains(viewer)) {
+                player.removeViewer(viewer)
+                plugin.logger.debug("❌ Hidden ${player.username} from ${viewer.username}'s tab")
+            }
+        } catch (e: Exception) {
+            plugin.logger.warn("Failed to hide ${player.username} from ${viewer.username}'s tab", e)
+        }
+    }
+    
+    /**
+     * ENHANCED: Update player display name for specific viewer with vanish indicator option
+     */
+    private suspend fun updatePlayerDisplayForViewer(player: Player, viewer: Player, showVanishIndicator: Boolean) {
+        try {
+            val respectRadium = plugin.configManager.getBoolean(plugin.configManager.mainConfig, "tablist.respect_radium_formatting", true)
+            val showIndicator = plugin.configManager.getBoolean(plugin.configManager.mainConfig, "tablist.show_vanish_indicator", true)
+            
+            if (respectRadium) {
+                // Get Radium formatting for this player
+                val radiumData = plugin.radiumIntegration.getPlayerData(player.uuid).join()
+                
+                if (radiumData != null && radiumData.rank != null) {
+                    val prefix = parseColorCodes(radiumData.rank.prefix.ifEmpty { "" })
+                    val color = parseColorCodes(radiumData.rank.color.ifEmpty { "&7" })
+                    
+                    val vanishIndicator = if (showVanishIndicator && showIndicator) "&8[V] &r" else ""
+                    val displayName = "$vanishIndicator$prefix$color${player.username}"
+                    
+                    player.displayName = MessageUtils.colorize(displayName)
+                    plugin.logger.debug("Updated Radium display for ${player.username} (vanish: $showVanishIndicator): $displayName")
+                    return
+                }
+            }
+            
+            // Fallback formatting
+            val fallbackFormat = plugin.configManager.getString(plugin.configManager.mainConfig, "tablist.fallback_format", "&7%player_name%")
+            val vanishIndicator = if (showVanishIndicator && showIndicator) "&8[V] &r" else ""
+            val displayName = "$vanishIndicator${fallbackFormat.replace("%player_name%", player.username)}"
+            
+            player.displayName = MessageUtils.colorize(displayName)
+            plugin.logger.debug("Updated fallback display for ${player.username} (vanish: $showVanishIndicator): $displayName")
+            
+        } catch (e: Exception) {
+            plugin.logger.warn("Failed to update display name for ${player.username} for viewer ${viewer.username}", e)
+        }
     }
     
     /**
