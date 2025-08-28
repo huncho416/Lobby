@@ -6,6 +6,7 @@ import huncho.main.lobby.models.PunishmentRequest
 import huncho.main.lobby.utils.MessageUtils
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
+import net.minestom.server.MinecraftServer
 import net.minestom.server.command.builder.Command
 import net.minestom.server.command.builder.arguments.ArgumentType
 import net.minestom.server.entity.Player
@@ -46,12 +47,12 @@ class BanCommand(private val plugin: LobbyPlugin) : Command("ban") {
             }
             
             // Use async permission checking
-            plugin.radiumIntegration.hasPermission(sender.uuid, "radium.punish.ban").thenAccept { hasRadiumPerm ->
-                plugin.radiumIntegration.hasPermission(sender.uuid, "lobby.admin").thenAccept { hasLobbyAdmin ->
+            plugin.radiumIntegration.hasPermission(sender.uuid, "radium.punish.ban").thenAccept outerPermCheck@{ hasRadiumPerm ->
+                plugin.radiumIntegration.hasPermission(sender.uuid, "lobby.admin").thenAccept innerPermCheck@{ hasLobbyAdmin ->
                     if (!hasRadiumPerm && !hasLobbyAdmin) {
                         MessageUtils.sendMessage(sender, "&cYou don't have permission to use this command.")
                         MessageUtils.sendMessage(sender, "&7Required: radium.punish.ban or lobby.admin")
-                        return@thenAccept
+                        return@innerPermCheck
                     }
                     
                     // Execute the punishment using the proper API
@@ -77,6 +78,8 @@ class BanCommand(private val plugin: LobbyPlugin) : Command("ban") {
     private fun executeBanPunishment(player: Player, target: String, reason: String) {
         GlobalScope.launch {
             try {
+                MessageUtils.sendMessage(player, "&7Processing ban for $target...")
+                
                 val request = PunishmentRequest(
                     target = target,
                     type = "BAN",
@@ -90,19 +93,40 @@ class BanCommand(private val plugin: LobbyPlugin) : Command("ban") {
                 
                 val result = plugin.radiumPunishmentAPI.issuePunishment(request)
                 
-                val message = if (result.isSuccess) {
-                    val response = (result as PunishmentApiResult.Success).response
-                    "&aSuccessfully banned ${response.target}: ${response.message}"
-                } else {
-                    "&cFailed to ban $target: ${result.getErrorMessage()}"
+                when {
+                    result.isSuccess -> {
+                        val response = (result as PunishmentApiResult.Success).response
+                        MessageUtils.sendMessage(player, "&a✓ Successfully banned ${response.target}")
+                        MessageUtils.sendMessage(player, "&7Reason: $reason")
+                        
+                        // Broadcast to staff if enabled
+                        MinecraftServer.getConnectionManager().onlinePlayers.forEach { staff ->
+                            if (staff != player && plugin.radiumIntegration.hasPermission(staff.uuid, "radium.staff").join()) {
+                                MessageUtils.sendMessage(staff, "&c${player.username} banned ${response.target}: $reason")
+                            }
+                        }
+                        
+                        plugin.logger.info("${player.username} successfully banned $target for: $reason")
+                    }
+                    result.isError -> {
+                        val errorMessage = result.getErrorMessage() ?: "Unknown error"
+                        MessageUtils.sendMessage(player, "&c✗ Failed to ban $target")
+                        MessageUtils.sendMessage(player, "&7Error: $errorMessage")
+                        
+                        if (errorMessage.contains("404") || errorMessage.contains("not found")) {
+                            MessageUtils.sendMessage(player, "&eTarget player may not exist or may never have joined the server.")
+                        } else if (errorMessage.contains("Service unavailable")) {
+                            MessageUtils.sendMessage(player, "&eRadium punishment service is temporarily unavailable. Try again later.")
+                        }
+                        
+                        plugin.logger.warn("${player.username} failed to ban $target: $errorMessage")
+                    }
                 }
                 
-                MessageUtils.sendMessage(player, message)
-                LobbyPlugin.logger.info("${player.username} attempted to ban $target - Success: ${result.isSuccess}")
-                
             } catch (e: Exception) {
-                MessageUtils.sendMessage(player, "&cAn error occurred while processing the ban: ${e.message}")
-                LobbyPlugin.logger.error("Error processing ban command from ${player.username}", e)
+                MessageUtils.sendMessage(player, "&c✗ An error occurred while processing the ban")
+                MessageUtils.sendMessage(player, "&7Please contact an administrator if this persists.")
+                plugin.logger.error("Error processing ban command from ${player.username} for target $target", e)
             }
         }
     }

@@ -205,7 +205,7 @@ class VisibilityManager(private val plugin: LobbyPlugin) {
     
     /**
      * Update player visibility based on vanish status - CRITICAL for in-game vanish
-     * Now uses the hybrid vanish system with plugin message listener
+     * ENHANCED: Now ensures proper entity hiding/showing for all viewers
      */
     suspend fun updatePlayerVisibilityForVanish(player: Player) {
         try {
@@ -214,27 +214,70 @@ class VisibilityManager(private val plugin: LobbyPlugin) {
             // Get all players in the same instance
             val allPlayers = player.instance?.players ?: emptySet()
             
+            plugin.logger.debug("Updating vanish visibility for ${player.username} (vanished: $isVanished) to ${allPlayers.size} viewers")
+            
             for (otherPlayer in allPlayers) {
                 if (otherPlayer.uuid != player.uuid) {
                     if (isVanished) {
                         val canSee = plugin.vanishPluginMessageListener.canSeeVanished(otherPlayer, player.uuid)
                         if (!canSee) {
-                            // Hide vanished player from viewers who can't see them
+                            // CRITICAL: Hide vanished player from viewers who can't see them (defaults)
                             hidePlayerFromViewer(otherPlayer, player)
                         } else {
                             // Show vanished player to viewers who can see them (staff)
                             showPlayerToViewer(otherPlayer, player)
                         }
                     } else {
-                        // Player is not vanished - show to everyone
+                        // CRITICAL: Player is not vanished - ensure they're visible to everyone
                         showPlayerToViewer(otherPlayer, player)
                     }
+                    
+                    // Also check visibility in the reverse direction
+                    updatePlayerVisibilityBidirectional(player, otherPlayer)
                 }
             }
             
-            plugin.logger.debug("Updated vanish visibility for ${player.username} (vanished: $isVanished)")
+            // Force tab list refresh for this player
+            plugin.tabListManager.updatePlayerTabList(player)
+            
+            plugin.logger.debug("Completed vanish visibility update for ${player.username}")
         } catch (e: Exception) {
             plugin.logger.error("Error updating vanish visibility for ${player.username}", e)
+        }
+    }
+    
+    /**
+     * Update visibility bidirectionally between two players
+     */
+    private suspend fun updatePlayerVisibilityBidirectional(player1: Player, player2: Player) {
+        try {
+            // Check if player1 can see player2
+            val player2Vanished = plugin.vanishPluginMessageListener.isPlayerVanished(player2.uuid)
+            if (player2Vanished) {
+                val canSeePlayer2 = plugin.vanishPluginMessageListener.canSeeVanished(player1, player2.uuid)
+                if (canSeePlayer2) {
+                    showPlayerToViewer(player1, player2)
+                } else {
+                    hidePlayerFromViewer(player1, player2)
+                }
+            } else {
+                showPlayerToViewer(player1, player2)
+            }
+            
+            // Check if player2 can see player1  
+            val player1Vanished = plugin.vanishPluginMessageListener.isPlayerVanished(player1.uuid)
+            if (player1Vanished) {
+                val canSeePlayer1 = plugin.vanishPluginMessageListener.canSeeVanished(player2, player1.uuid)
+                if (canSeePlayer1) {
+                    showPlayerToViewer(player2, player1)
+                } else {
+                    hidePlayerFromViewer(player2, player1)
+                }
+            } else {
+                showPlayerToViewer(player2, player1)
+            }
+        } catch (e: Exception) {
+            plugin.logger.warn("Error updating bidirectional visibility between ${player1.username} and ${player2.username}", e)
         }
     }
     
@@ -257,12 +300,15 @@ class VisibilityManager(private val plugin: LobbyPlugin) {
     
     /**
      * Hide a player from a specific viewer using Minestom's entity visibility
+     * ENHANCED: Ensures proper entity hiding for vanished players
      */
     private fun hidePlayerFromViewer(viewer: Player, target: Player) {
         try {
             // Use Minestom's entity visibility system - remove viewer from target's viewers
-            target.removeViewer(viewer)
-            plugin.logger.debug("Hidden ${target.username} from ${viewer.username}")
+            if (target.viewers.contains(viewer)) {
+                target.removeViewer(viewer)
+                plugin.logger.debug("🚫 Hidden ${target.username} from ${viewer.username} (vanish)")
+            }
         } catch (e: Exception) {
             plugin.logger.warn("Failed to hide ${target.username} from ${viewer.username}", e)
         }
@@ -270,12 +316,15 @@ class VisibilityManager(private val plugin: LobbyPlugin) {
     
     /**
      * Show a player to a specific viewer using Minestom's entity visibility
+     * ENHANCED: Ensures proper entity showing for unvanished players
      */
     private fun showPlayerToViewer(viewer: Player, target: Player) {
         try {
             // Use Minestom's entity visibility system - add viewer to target's viewers
-            target.addViewer(viewer)
-            plugin.logger.debug("Shown ${target.username} to ${viewer.username}")
+            if (!target.viewers.contains(viewer)) {
+                target.addViewer(viewer)
+                plugin.logger.debug("✅ Shown ${target.username} to ${viewer.username} (visible)")
+            }
         } catch (e: Exception) {
             plugin.logger.warn("Failed to show ${target.username} to ${viewer.username}", e)
         }

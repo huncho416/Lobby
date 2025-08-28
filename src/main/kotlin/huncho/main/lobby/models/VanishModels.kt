@@ -27,6 +27,42 @@ enum class VanishLevel(val level: Int, val displayName: String) {
         }
         
         /**
+         * Convert integer level to VanishLevel enum
+         * Handles edge cases and provides safe fallbacks
+         */
+        fun fromLevel(level: Int): VanishLevel {
+            return when (level) {
+                1 -> HELPER
+                2 -> MODERATOR  
+                3 -> ADMIN
+                4 -> OWNER
+                in Int.MIN_VALUE..0 -> HELPER // Negative or zero values default to HELPER
+                in 5..Int.MAX_VALUE -> OWNER  // Values above OWNER default to OWNER
+                else -> HELPER // Fallback for any other case
+            }
+        }
+        
+        /**
+         * Safely parse string level to VanishLevel enum
+         */
+        fun fromString(levelString: String?): VanishLevel {
+            if (levelString == null) return HELPER
+            
+            return try {
+                // Try parsing as enum name first
+                valueOf(levelString.uppercase())
+            } catch (e: IllegalArgumentException) {
+                try {
+                    // Try parsing as integer level
+                    fromLevel(levelString.toInt())
+                } catch (e: NumberFormatException) {
+                    // Default to HELPER if parsing fails
+                    HELPER
+                }
+            }
+        }
+        
+        /**
          * Check if viewer can see vanished player based on levels
          */
         fun canSeeVanished(viewerLevel: VanishLevel, vanishedLevel: VanishLevel): Boolean {

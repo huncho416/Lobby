@@ -108,7 +108,7 @@ class VanishTestCommand(private val plugin: LobbyPlugin) : Command("vanishtest")
             }
             
             runBlocking {
-                refreshVanishStatuses(sender)
+                refreshVanishSystems(sender)
             }
         }, refreshArg)
         
@@ -284,11 +284,41 @@ class VanishTestCommand(private val plugin: LobbyPlugin) : Command("vanishtest")
                 }
             }
             
+            // Add refresh button
             viewer.sendMessage(Component.text("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", NamedTextColor.DARK_GRAY))
+            viewer.sendMessage(Component.text("💡 Tip: Use ", NamedTextColor.GRAY)
+                .append(Component.text("/vanishtest refresh", NamedTextColor.YELLOW))
+                .append(Component.text(" to force refresh all systems", NamedTextColor.GRAY)))
             
         } catch (e: Exception) {
             viewer.sendMessage(Component.text("Error showing monitor stats: ${e.message}", NamedTextColor.RED))
             plugin.logger.error("Error in vanishtest monitor command", e)
+        }
+    }
+    
+    /**
+     * Force refresh all vanish-related systems
+     */
+    private fun refreshVanishSystems(viewer: Player) {
+        try {
+            viewer.sendMessage(Component.text("🔄 Refreshing vanish systems...", NamedTextColor.YELLOW))
+            
+            // Refresh tab lists for all players
+            plugin.tabListManager.refreshAllTabLists()
+            
+            // Update visibility for all players using runBlocking
+            runBlocking {
+                MinecraftServer.getConnectionManager().onlinePlayers.forEach { player ->
+                    plugin.visibilityManager.updatePlayerVisibilityForVanish(player)
+                }
+            }
+            
+            viewer.sendMessage(Component.text("✅ Refreshed tab lists and entity visibility for all players!", NamedTextColor.GREEN))
+            plugin.logger.info("${viewer.username} triggered vanish system refresh")
+            
+        } catch (e: Exception) {
+            viewer.sendMessage(Component.text("❌ Error refreshing systems: ${e.message}", NamedTextColor.RED))
+            plugin.logger.error("Error refreshing vanish systems", e)
         }
     }
     
