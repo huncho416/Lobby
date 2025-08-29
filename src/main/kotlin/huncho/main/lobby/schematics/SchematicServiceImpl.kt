@@ -46,19 +46,42 @@ class SchematicServiceImpl(
                     return@withContext null
                 }
                 
+                if (file.length() == 0L) {
+                    logger.error("Schematic file is empty: ${file.absolutePath}")
+                    return@withContext null
+                }
+                
                 val startTime = System.currentTimeMillis()
                 
                 FileInputStream(file).use { inputStream ->
-                    val schematic = net.hollowcube.schem.SchematicReader().read(inputStream)
-                    val loadTime = System.currentTimeMillis() - startTime
-                    
-                    SchematicHandle(
-                        name = file.nameWithoutExtension,
-                        file = file,
-                        schematic = schematic,
-                        loadTime = System.currentTimeMillis(),
-                        source = SchematicSource.File(file.absolutePath)
-                    )
+                    try {
+                        // Validate file size before reading
+                        val fileSize = file.length()
+                        if (fileSize > 50 * 1024 * 1024) { // 50MB limit
+                            logger.error("Schematic file too large (${fileSize / 1024 / 1024}MB): ${file.absolutePath}")
+                            return@withContext null
+                        }
+                        
+                        val schematic = net.hollowcube.schem.SchematicReader().read(inputStream)
+                        val loadTime = System.currentTimeMillis() - startTime
+                        
+                        logger.info("Successfully loaded schematic '${file.nameWithoutExtension}' (${fileSize / 1024}KB) in ${loadTime}ms")
+                        
+                        SchematicHandle(
+                            name = file.nameWithoutExtension,
+                            file = file,
+                            schematic = schematic,
+                            loadTime = System.currentTimeMillis(),
+                            source = SchematicSource.File(file.absolutePath)
+                        )
+                    } catch (e: java.nio.BufferUnderflowException) {
+                        logger.error("Corrupted or invalid schematic file (buffer underflow): ${file.absolutePath}. " +
+                                "The schematic file may be corrupted or incompatible with this server version.", e)
+                        null
+                    } catch (e: Exception) {
+                        logger.error("Failed to parse schematic file: ${file.absolutePath}", e)
+                        null
+                    }
                 }
             } catch (e: Exception) {
                 logger.error("Failed to load schematic from file: ${file.absolutePath}", e)
@@ -138,16 +161,28 @@ class SchematicServiceImpl(
                     else -> net.hollowcube.schem.Rotation.NONE
                 }
                 
-                // Apply schematic using the apply method
-                handle.schematic.apply(rotation) { pos, block ->
-                    // Skip air blocks if not pasting air
-                    if (!options.pasteAir && block.isAir()) {
-                        return@apply
+                // Apply schematic using the apply method with better error handling
+                try {
+                    handle.schematic.apply(rotation) { pos, block ->
+                        try {
+                            // Skip air blocks if not pasting air
+                            if (!options.pasteAir && block.isAir()) {
+                                return@apply
+                            }
+                            
+                            val worldPos = origin.add(pos.x(), pos.y(), pos.z())
+                            instance.setBlock(worldPos, block)
+                            blocksPlaced++
+                        } catch (e: Exception) {
+                            logger.warn("Failed to place block at $pos: ${e.message}")
+                        }
                     }
-                    
-                    val worldPos = origin.add(pos.x(), pos.y(), pos.z())
-                    instance.setBlock(worldPos, block)
-                    blocksPlaced++
+                } catch (e: java.nio.BufferUnderflowException) {
+                    logger.error("Buffer underflow while pasting schematic '${handle.name}'. The schematic file appears to be corrupted or incompatible.", e)
+                    return@withContext PasteResult.failure("Schematic file is corrupted or incompatible")
+                } catch (e: Exception) {
+                    logger.error("Failed to apply schematic '${handle.name}': ${e.message}", e)
+                    return@withContext PasteResult.failure("Failed to apply schematic: ${e.message}")
                 }
                 
                 val timeTaken = System.currentTimeMillis() - startTime

@@ -6,47 +6,70 @@ import net.minestom.server.coordinate.Pos
 import net.minestom.server.extras.velocity.VelocityProxy
 
 fun main() {
-    // Initialize Minestom server
-    val minecraftServer = MinecraftServer.init()
-    
-    // Initialize our lobby plugin first to load config
-    LobbyPlugin.initialize()
-    
-    // Configure Velocity support  
-    val velocityEnabled = LobbyPlugin.configManager.getBoolean(LobbyPlugin.configManager.mainConfig, "server.velocity.enabled", true)
-    if (velocityEnabled) {
-        val velocitySecret = LobbyPlugin.configManager.getString(LobbyPlugin.configManager.mainConfig, "server.velocity.secret", "")
-        if (velocitySecret.isNotEmpty() && velocitySecret != "your-velocity-secret-here" && velocitySecret.length >= 8) {
-            VelocityProxy.enable(velocitySecret)
-            println("✅ Velocity proxy support enabled")
-        } else {
-            println("⚠️ Velocity secret not configured properly")
+    // Set up global exception handler for uncaught exceptions
+    Thread.setDefaultUncaughtExceptionHandler { thread, exception ->
+        when (exception) {
+            is java.io.IOException -> {
+                if (exception.message?.contains("Connection reset") == true) {
+                    // Log connection resets at debug level to reduce spam when proxy goes offline
+                    LobbyPlugin.logger.debug("Connection reset (proxy disconnect): ${exception.message}")
+                } else {
+                    LobbyPlugin.logger.warn("IO Exception in thread ${thread.name}: ${exception.message}")
+                }
+            }
+            else -> {
+                LobbyPlugin.logger.error("Uncaught exception in thread ${thread.name}", exception)
+            }
         }
     }
     
-    // Handle player login - set them to spawn in the lobby instance
-    MinecraftServer.getGlobalEventHandler().addListener(AsyncPlayerConfigurationEvent::class.java) { event ->
-        val player = event.player
+    try {
+        // Initialize Minestom server
+        val minecraftServer = MinecraftServer.init()
         
-        // Set the spawning instance to our lobby
-        event.spawningInstance = LobbyPlugin.lobbyInstance
+        // Initialize our lobby plugin first to load config
+        LobbyPlugin.initialize()
         
-        // Set spawn position from config
-        val spawnX = LobbyPlugin.configManager.getDouble(LobbyPlugin.configManager.mainConfig, "spawn.x", 0.5)
-        val spawnY = LobbyPlugin.configManager.getDouble(LobbyPlugin.configManager.mainConfig, "spawn.y", 100.0)
-        val spawnZ = LobbyPlugin.configManager.getDouble(LobbyPlugin.configManager.mainConfig, "spawn.z", 0.5)
-        player.respawnPoint = Pos(spawnX, spawnY, spawnZ)
+        // Configure Velocity support  
+        val velocityEnabled = LobbyPlugin.configManager.getBoolean(LobbyPlugin.configManager.mainConfig, "server.velocity.enabled", true)
+        if (velocityEnabled) {
+            val velocitySecret = LobbyPlugin.configManager.getString(LobbyPlugin.configManager.mainConfig, "server.velocity.secret", "")
+            if (velocitySecret.isNotEmpty() && velocitySecret != "your-velocity-secret-here" && velocitySecret.length >= 8) {
+                VelocityProxy.enable(velocitySecret)
+                println("✅ Velocity proxy support enabled")
+            } else {
+                println("⚠️ Velocity secret not configured properly")
+            }
+        }
+        
+        // Handle player login - set them to spawn in the lobby instance
+        MinecraftServer.getGlobalEventHandler().addListener(AsyncPlayerConfigurationEvent::class.java) { event ->
+            val player = event.player
+            
+            // Set the spawning instance to our lobby
+            event.spawningInstance = LobbyPlugin.lobbyInstance
+            
+            // Set spawn position from config
+            val spawnX = LobbyPlugin.configManager.getDouble(LobbyPlugin.configManager.mainConfig, "spawn.x", 0.5)
+            val spawnY = LobbyPlugin.configManager.getDouble(LobbyPlugin.configManager.mainConfig, "spawn.y", 100.0)
+            val spawnZ = LobbyPlugin.configManager.getDouble(LobbyPlugin.configManager.mainConfig, "spawn.z", 0.5)
+            player.respawnPoint = Pos(spawnX, spawnY, spawnZ)
+        }
+        
+        // Get server configuration
+        val port = LobbyPlugin.configManager.getInt(LobbyPlugin.configManager.mainConfig, "server.port", 25566)
+        val bindAddress = LobbyPlugin.configManager.getString(LobbyPlugin.configManager.mainConfig, "server.bind_address", "0.0.0.0")
+        
+        // Start the server
+        minecraftServer.start(bindAddress, port)
+        
+        println("✅ Lobby server started successfully!")
+        println("🌐 Server running on $bindAddress:$port")
+        println("🔌 Velocity proxy support: ${if (velocityEnabled) "enabled" else "disabled"}")
+        println("🎮 Players can now connect through the Radium proxy")
+        
+    } catch (e: Exception) {
+        LobbyPlugin.logger.error("Failed to start lobby server", e)
+        System.exit(1)
     }
-    
-    // Get server configuration
-    val port = LobbyPlugin.configManager.getInt(LobbyPlugin.configManager.mainConfig, "server.port", 25566)
-    val bindAddress = LobbyPlugin.configManager.getString(LobbyPlugin.configManager.mainConfig, "server.bind_address", "0.0.0.0")
-    
-    // Start the server
-    minecraftServer.start(bindAddress, port)
-    
-    println("✅ Lobby server started successfully!")
-    println("🌐 Server running on $bindAddress:$port")
-    println("🔌 Velocity proxy support: ${if (velocityEnabled) "enabled" else "disabled"}")
-    println("🎮 Players can now connect through the Radium proxy")
 }

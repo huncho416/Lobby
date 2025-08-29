@@ -301,13 +301,13 @@ class VisibilityManager(private val plugin: LobbyPlugin) {
     
     /**
      * Hide a player from a specific viewer using Minestom's entity visibility
-     * ENHANCED: Ensures proper entity hiding for vanished players
+     * CRITICAL FIX: Correct viewer/target relationship for entity hiding
      */
     private fun hidePlayerFromViewer(viewer: Player, target: Player) {
         try {
-            // Use Minestom's entity visibility system - remove viewer from target's viewers
-            if (target.viewers.contains(viewer)) {
-                target.removeViewer(viewer)
+            // FIXED: Remove target from viewer's sight (not viewer from target's list)
+            if (viewer.viewers.contains(target)) {
+                viewer.removeViewer(target)
                 plugin.logger.debug("🚫 Hidden ${target.username} from ${viewer.username} (vanish)")
             }
         } catch (e: Exception) {
@@ -317,13 +317,13 @@ class VisibilityManager(private val plugin: LobbyPlugin) {
     
     /**
      * Show a player to a specific viewer using Minestom's entity visibility
-     * ENHANCED: Ensures proper entity showing for unvanished players
+     * CRITICAL FIX: Correct viewer/target relationship for entity showing
      */
     private fun showPlayerToViewer(viewer: Player, target: Player) {
         try {
-            // Use Minestom's entity visibility system - add viewer to target's viewers
-            if (!target.viewers.contains(viewer)) {
-                target.addViewer(viewer)
+            // FIXED: Add target to viewer's sight (not viewer to target's list)
+            if (!viewer.viewers.contains(target)) {
+                viewer.addViewer(target)
                 plugin.logger.debug("✅ Shown ${target.username} to ${viewer.username} (visible)")
             }
         } catch (e: Exception) {

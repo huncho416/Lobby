@@ -90,7 +90,26 @@ class SchematicManager(
                 if (config !is Map<*, *>) continue
                 
                 val enabled = config["enabled"] as? Boolean ?: true
-                if (!enabled) continue
+                if (!enabled) {
+                    logger.debug("Skipping disabled schematic: $name")
+                    continue
+                }
+                
+                // Pre-validate the schematic file if we can determine its path
+                val filePath = config["file"] as? String
+                if (filePath != null) {
+                    val file = if (File(filePath).isAbsolute) {
+                        File(filePath)
+                    } else {
+                        File(dataFolder, filePath)
+                    }
+                    
+                    val validation = validateSchematicFile(file)
+                    if (!validation.isValid) {
+                        logger.error("Schematic '$name' validation failed: ${validation.message}")
+                        continue
+                    }
+                }
                 
                 try {
                     val result = service.pasteSchematic(instance, name)
@@ -98,6 +117,7 @@ class SchematicManager(
                     if (result.success) {
                         pastedCount++
                         totalBlocks += result.blocksPlaced
+                        logger.info("✓ Pasted schematic '$name' (${result.blocksPlaced} blocks)")
                     } else {
                         logger.error("Failed to paste startup schematic '$name': ${result.error}")
                     }
@@ -114,6 +134,12 @@ class SchematicManager(
                 println("\u001B[32m✓ Successfully loaded $pastedCount schematics ($totalBlocks blocks)\u001B[0m")
             } else {
                 logger.warn("No startup schematics were pasted successfully")
+                logger.info("If you have schematic files, please check:")
+                logger.info("  1. Files exist in the schematics/ folder")
+                logger.info("  2. Files are valid .schem or .schematic format")
+                logger.info("  3. Files are not corrupted")
+                logger.info("  4. Files are enabled in schematics.yml config")
+                logger.info("  5. File paths in config match actual file names")
             }
             
         } catch (e: Exception) {
@@ -169,4 +195,47 @@ class SchematicManager(
             logger.error("Error during schematic manager shutdown", e)
         }
     }
+    
+    /**
+     * Validate a schematic file for common issues
+     */
+    private fun validateSchematicFile(file: File): ValidationResult {
+        if (!file.exists()) {
+            return ValidationResult(false, "File does not exist: ${file.absolutePath}")
+        }
+        
+        if (!file.canRead()) {
+            return ValidationResult(false, "Cannot read file (permissions): ${file.absolutePath}")
+        }
+        
+        if (file.length() == 0L) {
+            return ValidationResult(false, "File is empty: ${file.name}")
+        }
+        
+        if (file.length() > 100 * 1024 * 1024) { // 100MB
+            return ValidationResult(false, "File is too large (${file.length() / 1024 / 1024}MB): ${file.name}")
+        }
+        
+        val extension = file.extension.lowercase()
+        if (extension !in listOf("schem", "schematic")) {
+            return ValidationResult(false, "Invalid file extension '$extension': ${file.name}. Expected .schem or .schematic")
+        }
+        
+        // Try to peek at file header
+        try {
+            file.inputStream().use { stream ->
+                val firstBytes = ByteArray(10)
+                val bytesRead = stream.read(firstBytes)
+                if (bytesRead < 5) {
+                    return ValidationResult(false, "File too small or corrupted: ${file.name}")
+                }
+            }
+        } catch (e: Exception) {
+            return ValidationResult(false, "Cannot read file header: ${e.message}")
+        }
+        
+        return ValidationResult(true, "File appears valid")
+    }
+    
+    data class ValidationResult(val isValid: Boolean, val message: String)
 }

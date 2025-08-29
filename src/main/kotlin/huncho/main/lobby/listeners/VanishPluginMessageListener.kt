@@ -216,8 +216,13 @@ class VanishPluginMessageListener(private val plugin: LobbyPlugin) : EventListen
                 plugin.visibilityManager.updatePlayerVisibilityForVanish(changedPlayer)
             }
             
-            // CRITICAL: Force complete refresh to ensure consistency
+            // CRITICAL: Force complete refresh to ensure consistency (with new tab refresh method)
             plugin.tabListManager.refreshAllTabLists()
+            
+            // CRITICAL FIX: Also force individual tab refresh for the changed player
+            if (changedPlayer != null) {
+                plugin.tabListManager.forcePlayerTabRefresh(changedPlayer)
+            }
             
             plugin.logger.info("✅ Completed comprehensive visibility update for ${changedPlayer?.username ?: changedPlayerUuid}")
         }
@@ -256,11 +261,13 @@ class VanishPluginMessageListener(private val plugin: LobbyPlugin) : EventListen
     
     /**
      * Show player to specific viewer using enhanced entity visibility
+     * CRITICAL FIX: Correct viewer/target relationship
      */
     private suspend fun showPlayerToViewer(viewer: Player, target: Player) {
         try {
-            if (!target.viewers.contains(viewer)) {
-                target.addViewer(viewer)
+            // FIXED: Add target to viewer's sight (not viewer to target's list)
+            if (!viewer.viewers.contains(target)) {
+                viewer.addViewer(target)
                 plugin.logger.debug("✅ Showed ${target.username} to ${viewer.username}")
             }
         } catch (e: Exception) {
@@ -270,11 +277,13 @@ class VanishPluginMessageListener(private val plugin: LobbyPlugin) : EventListen
     
     /**
      * Hide player from specific viewer using enhanced entity visibility
+     * CRITICAL FIX: Correct viewer/target relationship
      */
     private suspend fun hidePlayerFromViewer(viewer: Player, target: Player) {
         try {
-            if (target.viewers.contains(viewer)) {
-                target.removeViewer(viewer)
+            // FIXED: Remove target from viewer's sight (not viewer from target's list)
+            if (viewer.viewers.contains(target)) {
+                viewer.removeViewer(target)
                 plugin.logger.debug("❌ Hidden ${target.username} from ${viewer.username}")
             }
         } catch (e: Exception) {
